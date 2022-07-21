@@ -1,0 +1,2631 @@
+---
+title: "TOX_soil mods_V3"
+output: html_document
+---
+```{r, include=FALSE}
+set.seed(33)
+library(readxl)
+library(lme4)
+library(lmerTest)
+library(ggplot2)
+library(ggpubr)
+library(viridis)
+library(fBasics)
+library(knitr)
+library(reshape2)
+library(tidyverse)
+library(dplyr)
+library(sjPlot)
+library(sjmisc)
+```
+
+```{r, include=FALSE}
+#load data - first the main metadata file
+TOX_data=read_excel("TOX_data_all_pub.xlsx", sheet = "Data")
+TOX_data$Sample = as.factor(TOX_data$Sample)
+TOX_data$Season=as.factor(TOX_data$Season)
+TOX_data$Sector=as.factor(TOX_data$Sector)
+TOX_data$Sex = as.factor(TOX_data$Sex)
+TOX_data$Treatment = as.factor(TOX_data$Treatment)
+TOX_data$Diabetes=as.factor(TOX_data$Diabetes)
+TOX_data$Cancer=as.factor(TOX_data$Cancer)
+TOX_data$Cardio=as.factor(TOX_data$Cardio)
+TOX_data$Respiratory=as.factor(TOX_data$Respiratory)
+TOX_data$Neuro=as.factor(TOX_data$Neuro)
+TOX_data$Pneumonia=as.factor(TOX_data$Pneumonia)
+TOX_data$BMI_code = factor(TOX_data$BMI_code, ordered = TRUE, levels = c("underweight","normal","overweight","obese"))
+
+#next load the data from collaborators - drugs in the system
+serum_drugs=read_excel("TOX screen_allmatrices.xlsx", sheet = "serum_merge")
+serum_drugs = serum_drugs %>%
+  select(-id, -rep1, -rep)
+drugs=as.data.frame(ifelse(serum_drugs[5:82] == 0, 0, 1))
+drugs$Donor = serum_drugs$donor
+drugs= drugs %>%
+  mutate(num_drugs = select(., Albuterol:Hydralazine) %>% rowSums(na.rm= TRUE)) %>%
+  select(Donor, num_drugs)
+num_serum_drugs = drugs
+TOX_data = TOX_data %>%
+  left_join(num_serum_drugs, by="Donor")
+
+#create a dataset of BMI for each donor; this includes numeric BMI as well as BMI category as determined by CDC BMI ranges
+BMI = TOX_data %>%
+  filter(Treatment == "donor") %>%
+  filter(Percent_ADH == "1") %>%
+  select(Donor, BMI, BMI_code)
+
+#load the dataset for alpha diversity calculated from 16S amplicon sequencing data sets (see TOX_16S_analysis.rmd for code used to generate the 16S file)
+TOX_alpha_bact = read_excel("TOX_16S_alphadiv.xlsx")
+TOX_alpha_bact_wide = TOX_alpha_bact %>% 
+  select(Sample, mean, measure) %>%
+  spread(key=measure, value = mean)
+colnames(TOX_alpha_bact_wide)=c("Sample","Chao1_bact", "InvSimp_bact","Rich_bact")
+
+#load the dataset for alpha diversity calculated from ITS amplicon sequencing data sets (see TOX_ITS_analysis.rmd for code used to generate the ITS file)
+TOX_alpha_ITS = read_excel("TOX_ITS_alphadiv.xlsx")
+TOX_alpha_ITS_wide = TOX_alpha_ITS %>% 
+  select(Sample, mean, measure) %>%
+  spread(key=measure, value = mean)
+colnames(TOX_alpha_ITS_wide)=c("Sample","Chao1_ITS", "InvSimp_ITS","Rich_ITS")
+
+#add alpha diversity calculations to the main dataset
+TOX_data = TOX_data %>%
+  left_join(TOX_alpha_bact_wide, by = "Sample") %>%
+  left_join(TOX_alpha_ITS_wide, by = "Sample")
+  
+#filter by Treatment to create a dataframe with decomposition soils only
+TOX_data_donor = TOX_data %>%
+  filter(Treatment == "donor")
+
+#filter by Treatment to create a dataframe with control soils only
+TOX_data_control= TOX_data %>%
+  filter(Treatment == "control")
+
+#filter the dataset to create a dataframe that only includes samples collected at or less than 5000 accumulated degree days (ADH)
+TOX_data_5000= TOX_data %>%
+  filter(ADH <= 5000)
+TOX_data_5000_donor= TOX_data_5000 %>%
+  filter(Treatment == "donor")
+
+#filter the dataset to create a dataframe that shows categorical data for each donor by selecting only the last sample for each donor
+TOX_data_single = TOX_data %>%
+  filter(Percent_ADH == "1")
+
+#filter the single dataframe further to only show the decomposition soil for the last sample for each donor
+TOX_data_single_donor = TOX_data_single %>% filter(Treatment == "donor")
+
+#calculate the largest pH log response ratio for each donor at add it to the TOX_data_single_donor dataframe
+pH_peak = TOX_data_donor %>%
+  group_by(Donor) %>%
+  summarise(pH_peak = pH_LRR[which.max(abs(pH_LRR))])
+TOX_data_single_donor = TOX_data_single_donor %>%
+  left_join(pH_peak, by="Donor")
+
+
+colpalette2= c("khaki3","steelblue3","orange","chocolate","aquamarine4","plum3","black","mediumpurple4","violetred3","brown4","chartreuse3","lavenderblush4","lightpink","mediumpurple3","lightcyan1","palegreen4","red1","wheat4","papayawhip","tomato3","gold1")
+colpalette1= c("khaki3","steelblue3","orange","chocolate","aquamarine4","plum3","sienna3","mediumpurple4","violetred3","brown4","chartreuse3","midnightblue","lightpink","mediumpurple3","lightskyblue4","coral4","peru","wheat4","palegreen4","tomato3")
+```
+
+```{r, include=FALSE}
+#look at the distribution of donors across season of placement
+table(TOX_data$Donor, TOX_data$Season)
+```
+
+```{r, include=FALSE}
+#plot raw ph, ec, and evolved CO2 for each donor over time in treatment and control soils
+TOX_data_ph.ec.resp = TOX_data %>% select(Sample, Donor, Treatment, ADH, pH, EC, Evolved_CO2)
+
+TOX_data_ph.ec.resp_long = melt(TOX_data_ph.ec.resp, id.vars = c("Sample", "Donor", "ADH", "Treatment"))
+TOX_data_ph.ec.resp_long = TOX_data_ph.ec.resp_long %>% filter(value != "NA")
+
+ggplot(TOX_data_ph.ec.resp_long, aes(x=ADH, y=value, group=Donor, color=Donor)) + geom_line(size=1) + facet_wrap(Treatment ~ variable, scales = "free_y") + scale_color_manual(values = colpalette2) +theme_bw()
+```
+
+
+# Do illness categories and BMI co-vary?
+
+```{r, include=FALSE}
+normalTest(TOX_data_single_donor$BMI, method = "sw")
+```
+
+```{r, echo=FALSE}
+hist(TOX_data_single_donor$BMI)
+```
+
+WILCOXON: BMI~Cancer
+```{r, echo=FALSE}
+wilcox.test(TOX_data_single_donor$BMI~TOX_data_single_donor$Cancer)
+```
+
+WILCOXON: BMI~Diabetes
+```{r, echo=FALSE}
+wilcox.test(TOX_data_single_donor$BMI~TOX_data_single_donor$Diabetes)
+```
+
+WILCOXON: BMI~Cardio: sig
+```{r, echo=FALSE}
+wilcox.test(TOX_data_single_donor$BMI~TOX_data_single_donor$Cardio)
+```
+
+```{r}
+#look at difference in BMI between donors with and without cardiovascular illnesses
+ggplot(TOX_data_single_donor, aes(x=Cardio, y=BMI))+geom_boxplot()
+```
+
+WILCOXON: BMI~Respiratory
+```{r, echo=FALSE}
+wilcox.test(TOX_data_single_donor$BMI~TOX_data_single_donor$Respiratory)
+```
+
+WILCOXON: BMI~Neurological
+```{r, echo=FALSE}
+wilcox.test(TOX_data_single_donor$BMI~TOX_data_single_donor$Neuro)
+```
+
+WILCOXON: BMI~Pneumonia
+```{r, echo=FALSE}
+wilcox.test(TOX_data_single_donor$BMI~TOX_data_single_donor$Pneumonia)
+```
+
+```{r, include=FALSE}
+#plot BMI differences between donors with and without illnesses in one figure with statistics (wilcoxon tests)
+TOX_BMI = TOX_data_single_donor %>% select(Donor, Weight, BMI, Total_ADH, Cancer, Diabetes, Cardio, Respiratory, Neuro, Pneumonia)
+TOX_BMI_long = melt(TOX_BMI, id=c("Donor","Weight", "BMI", "Total_ADH"))
+
+a=ggplot(TOX_BMI_long, aes(x=value, y=BMI))+ geom_point(aes(color=value)) + stat_compare_means(label.x = 1.5, method="wilcox.test", label="p.format")+scale_x_discrete(labels = c("No","Yes")) + stat_summary(fun.y="mean", geom="point", pch=4, colour = "red", size= 5) + scale_color_manual(values=c("#999999", "#E69F00", "#56B4E9")) + theme(legend.position= "none", axis.title.x = element_blank()) + facet_wrap(~variable)+labs(title="BMI by illness", y= "BMI")
+```
+
+BMI X illnesses summary:
+
+```{r, echo=FALSE}
+a+theme_bw()
+```
+
+# Do illness categories and total ADH co-vary?
+
+```{r, include=FALSE}
+normalTest(TOX_data_single_donor$Total_ADH, method = "sw")
+```
+
+```{r, echo=FALSE}
+hist(TOX_data_single_donor$Total_ADH)
+```
+
+```{r, echo=FALSE}
+#plot differences in total decomposition time (total ADH to complete active decomposition) between donors with and without illnesses in one figure with statistics (wilcoxon tests)
+ggplot(TOX_BMI_long, aes(x=value, y=Total_ADH))+ geom_point(aes(color=value)) + stat_compare_means(label.x = 1.5, method="wilcox.test", label="p.format")+scale_x_discrete(labels = c("No","Yes")) + stat_summary(fun.y="mean", geom="point", pch=4, colour = "red", size= 5) + scale_color_manual(values=c("#999999", "#E69F00", "#56B4E9")) + theme(legend.position= "none", axis.title.x = element_blank()) + facet_wrap(~variable)+labs(title="Total ADH by illness", y= "Total ADH to complete active decomposition")
+```
+
+Only cardiovascular illnesses displayed a trend with BMI and total ADH to complete active decomposition, whereby individuals with cardiovascular illnesses had higher BMI and therefore a greater ADH to complete active decomposition.
+
+# BMI and total ADH:
+
+```{r, include=FALSE}
+#test if BMI explains variation in total ADH to complete active decomposition, accounting for season of placement, biological sex, and age
+mod2=lm(Total_ADH~BMI*Season+Sex+Age, data=TOX_data_single_donor)
+aov2=anova(mod2)
+
+mod = lm(Total_ADH~BMI, data=TOX_data_single_donor)
+aov=anova(mod)
+
+```
+
+LM: Total_ADH~BMIxSeason+Sex+Age
+```{r, echo=FALSE}
+kable(aov2, digits = 3)
+```
+
+```{r, echo=FALSE}
+#plot total ADH ~ BMI
+ggplot(TOX_data_single_donor, aes(BMI, Total_ADH))+ geom_point(stat="identity", size=3)+geom_smooth(method = lm, se=TRUE, fullrange=FALSE, size=1.5) +theme_bw()
+```
+
+BMI of an individual impacts the total ADH to complete active decomposition. Looking across all seasons, season does have a small impact on total ADH to complete active decomposition, however these results seem to be driven by BMI distrubution across seasons, specifically the 2 donors in fall (15 and 16), who had different BMI, but both had low total ADH. This may be a true seasonal effect, however with only 2 individuals it is difficult to draw conclusions. Indeed, if we remove fall from the dataset and rerun the model, season is no longer significant. Age and Sex were not significant. 
+
+# Mass and illnesses
+```{r, include=FALSE}
+#subset the dataframe to keep only variables of interest
+BMI_illness = TOX_data_single_donor %>% select(Donor, BMI_code, Total_ADH, Weight, Cancer, Cardio, Respiratory, Neuro)
+
+wilcox.test(BMI_illness$Weight~BMI_illness$Cancer)
+t.test(Weight~Cancer, data = BMI_illness)
+
+#plot differences in weight between donors with and without illnesses in one figure with statistics (wilcoxon tests)
+ggplot(TOX_BMI_long, aes(x=value, y=Weight))+ geom_point(aes(color=value)) + stat_compare_means(label.x = 1.5, method="wilcox.test", label="p.format")+scale_x_discrete(labels = c("No","Yes")) + stat_summary(fun.y="mean", geom="point", pch=4, colour = "red", size= 5) + scale_color_manual(values=c("#999999", "#E69F00", "#56B4E9")) + theme(legend.position= "none", axis.title.x = element_blank()) + facet_wrap(~variable)+labs(title="Weight by illness", y= "Weight (pounds)")
+
+a= lm(Weight~BMI_code, data = BMI_illness)
+summary(a)
+
+#plot differences in BMI between donors with and without illnesses in one figure with statistics (wilcoxon tests)
+ggplot(TOX_BMI_long, aes(x=value, y=BMI))+ geom_point(aes(color=value)) + stat_compare_means(label.x = 1.5, method="wilcox.test", label="p.format")+scale_x_discrete(labels = c("No","Yes")) + stat_summary(fun.y="mean", geom="point", pch=4, colour = "red", size= 5) + scale_color_manual(values=c("#999999", "#E69F00", "#56B4E9")) + theme(legend.position= "none", axis.title.x = element_blank()) + facet_wrap(~variable)+labs(title="BMI by illness", y= "BMI (kg/m2)")
+```
+
+
+# Correlate BMI and sex
+
+```{r, include=FALSE}
+test=t.test(BMI~Sex, data=TOX_data_single_donor)
+test
+
+wilcox.test(TOX_data_single_donor$BMI~TOX_data_single_donor$Sex)
+```
+
+```{r, echo=FALSE}
+ggplot(TOX_data_single_donor, aes(x=Sex, y=BMI, color = Sex))+geom_boxplot()+scale_color_manual(values = colpalette1)+ stat_compare_means(label.x = 1.5, method="t.test", label="p.format")+theme_bw()
+```
+
+While not significant (p=`r round(test$p.value,3)`), males tended to have higher BMI than females.
+
+# Correlate BMI and Age
+
+```{r, include=FALSE}
+test_age=anova(lm(BMI~Age, data=TOX_data_single_donor)) #p = 0.09525
+```
+
+```{r, echo=FALSE}
+ggplot(TOX_data_single_donor, aes(x=Age, y=BMI))+geom_point()+geom_smooth(method=lm)+ stat_compare_means(label.x = 1.5, label="p.format")+theme_bw()
+```
+
+While not significant (p=`r round(test_age[1,5],3)`), BMI tended to decrease with age.
+
+# pH models:
+
+```{r, include=FALSE}
+#first look globally at soil pH; to do this, the dataframe is subset to reshape the dataframe for graphing
+pH=TOX_data_donor %>% select("Sample","Donor","ADH", "Percent_ADH","pH_LRR", "BMI","BMI_code")
+pH_long=melt(pH, id=c("Sample","Donor", "BMI","BMI_code", "pH_LRR"))
+```
+
+```{r, echo=FALSE}
+#plot pH log response ratio over both ADH and percent ADH for each donor - lines colored by the donor's BMI
+ggplot(pH_long, aes(x=value, y=pH_LRR, color=BMI, group=Donor))+geom_line(stat = "identity", size=1)+facet_wrap(~variable, scales = "free_x")+scale_color_viridis()+theme_bw()
+
+#plot pH log response ratio over both ADH and percent ADH for each donor - lines colored by the donor
+ggplot(pH_long, aes(x=value, y=pH_LRR, color=Donor, group=Donor))+geom_line(stat = "identity", size=1)+facet_grid(~variable, scales = "free_x")+scale_color_manual(values=colpalette2)+theme_bw()
+
+#plot the linear relationship between soil pH log response ratio over time (ADH) for each donor - lines colored by donor
+ggplot(TOX_data_5000_donor, aes(x=ADH, y=pH_LRR, color=Donor))+geom_smooth(size = 3, method = "lm", se=FALSE) + scale_color_manual(values=colpalette2) + theme_bw()
+```
+
+
+First, check for normality 
+```{r, include=FALSE}
+normalTest(TOX_data_donor$pH_LRR, method = "da") #normality test for pH log response ratio
+normalTest(TOX_data$pH, method = "da") #normality test for raw pH
+```
+
+Variables pH Log Response Ration (omnibus p = 0.002), raw pH (omnibus p = 1.5e-05), and slope of pH log response ratio over ADH (p= 0.009) were all not statistically normal. As these are normalized and raw pH values, they are already on a log scale, therefore log transforming does not make the data normal.
+
+```{r, echo=FALSE}
+#view distributions of pH across samples
+hist(TOX_data_donor$pH_LRR)
+hist(TOX_data$pH)
+hist(TOX_data_single_donor$pH_LRR_slope)
+```
+
+First model: is the pH of decomposition soils different from control soils?
+
+```{r,include=FALSE}
+library(lmerTest)
+
+#Hierarchical models:
+pH_int = lmer(pH ~ 1+Treatment*Season*ADH + (1|Donor)+(1|Donor:Treatment),data=TOX_data_5000) #random intercept model
+summary(pH_int)
+anova(pH_int)
+
+pH_slope =  lmer(pH ~ Treatment*Season + ADH + (0+ ADH|Donor)+(0+ADH|Donor:Treatment),data=TOX_data_5000) #random slope model
+summary(pH_slope)
+anova(pH_slope)
+
+pH_intslope =  lmer(pH ~ ADH*Treatment + Season + (1|Donor) + (1+ADH|Donor:Treatment), data=TOX_data_5000) #random intercept and random slope model
+summary(pH_intslope)
+pH_ints_aov=anova(pH_intslope)
+pH_ints_raov=ranova(pH_intslope)
+
+#pH_intslope_complex =  lmer(pH ~ Treatment*Season*ADH + (1+ADH+Treatment*Season|Donor)+(1+ADH+Season|Donor:Treatment),data=TOX_data) 
+#anova(pH_intslope, pH_intslope_complex)
+#complex model, no improvement in fit 
+
+
+anova(pH_int,  pH_slope) #random int and slope is better than random slope mod (AIC 413, 478)
+anova(pH_int, pH_intslope)#random int and slope mod better than random int mod (AIC 413, 333) 
+
+#it seems that the random int and slope model provides a better fit than the random slope and random int models, respectively; random int and slope AIC < random int AIC < random slope AIC
+```
+
+```{r, echo=FALSE}
+#plot raw pH over time (in ADH) for all control and decompostiion soils for each donor block
+ggplot(TOX_data, aes(x=ADH, y=pH, color=Donor)) + geom_point() + geom_smooth(method = lm, se=FALSE, fullrange=FALSE)+ scale_color_manual(values=colpalette2) +facet_grid(Season~Treatment) +theme_bw()
+```
+
+How is treatment not significant??? Ok, looking at the violin plots, it makes sense. In terms of a general trend, we don't see differences. However, when thinking about pH response between donors, the variability in increase vs. decrease is likely masking this effect. 
+
+```{r, echo = FALSE}
+#look at distribtion of control and decomposition soils using violin plot
+ggplot(TOX_data, aes(x=Treatment, y=pH, fill=Treatment))+ geom_violin(trim=FALSE)+geom_boxplot(width=0.1, fill="white")
+```
+
+
+LMER: lmer(pH ~ Treatment x Season x ADH + (1|Donor) + (1+ADH|Donor:Treatment)
+```{r, echo=FALSE}
+kable(pH_ints_aov, digits = 3)
+```
+
+Random effects:
+```{r, echo=FALSE}
+kable(pH_ints_aov, digits = 3)
+```
+
+Plot model: interactions:
+```{r, echo=FALSE}
+plot_model(pH_intslope, type = "int")
+```
+
+Q: do controls change over time or differ by season?
+```{r,include=FALSE}
+TOX_data_5000_control = TOX_data_5000 %>% filter(Treatment == "control")
+pH_intslope_con =  lmer(pH ~ ADH*Season + (1|Donor) + (1+ADH|Donor), data=TOX_data_5000_control) #random intercept and random slope model
+pH_int_con = lmer(pH ~ ADH*Season + (1|Donor), data=TOX_data_5000_control) #random intercept model
+anova(pH_int_con, pH_intslope_con) #models are not significantly different 
+
+summary(pH_intslope_con)
+pH_ints_con_aov=anova(pH_intslope_con)
+pH_ints_con_raov=ranova(pH_intslope_con)
+ahd=pH_ints_con_aov[1,6]
+season=pH_ints_con_aov[2,6]
+```
+
+LMER: pH (controls only) ~ Season *ADH + (1|Donor)+(1+ADH|Donor)
+```{r, echo=FALSE}
+kable(pH_ints_con_aov, digits = 3)
+```
+
+```{r, echo=FALSE}
+#linear trends between soil pH and time (in ADH) for all donors within respective placement seasons for control soils
+ggplot(TOX_data_control, aes(x=ADH, y=pH, color=Donor)) + geom_point() + geom_smooth(method = lm, se=FALSE, fullrange=FALSE)+ scale_color_manual(values=colpalette2) +facet_grid(~Season) +theme_bw()
+```
+
+When looking at raw pH in our control soils, pH does not change significantly with ADH (p=`r round(ahd,3)`) or season (p=`r round(season,3)`). We also see that there is no significant interaction between season and ADH, suggesting that pH change over time does not differ between seasons in the controls.
+
+```{r, echo=FALSE}
+#linear trends between soil pH and time (in ADH) for all donors within respective placement seasons for decomposition soils
+ggplot(TOX_data_donor, aes(x=ADH, y=pH, color=Donor)) + geom_point() + geom_smooth(method = lm, se=FALSE, fullrange=FALSE)+ scale_color_manual(values=colpalette2) +facet_grid(~Season) +theme_bw()
+```
+
+Unfortunately, we also see the same trend with decomp soils (adh and season not significant). This is likely due to variability in increase vs. decrease masking primary effects.
+
+Next model: Does normalized (log response ratio) pH change over time and/or differ by season/BMI/Sex?
+
+```{r, include==FALSE}
+#linear trends between normalized soil pH and time (in ADH) for all donors within respective placement seasons - colored by donor
+ggplot(TOX_data_donor, aes(x=ADH, y=pH_LRR, color=Donor)) + geom_point(size=3) + geom_smooth(size=2.5,method = lm, se=FALSE, fullrange=FALSE)+ scale_color_manual(values=colpalette2) +facet_grid(~Season) +theme_bw()
+
+#normalized soil pH over time (in ADH) for all donors within respective placement seasons - colored by donor
+ggplot(TOX_data_donor, aes(x=ADH, y=pH_LRR, color=Donor)) + geom_point(size=3) + geom_line(size=2.5)+ scale_color_manual(values=colpalette2) +facet_grid(~Season) +theme_bw()
+
+#normalized soil pH over time (in ADH) by biological sex
+ggplot(TOX_data_donor, aes(x=ADH, y=pH_LRR, color=Sex)) + geom_point(size=3) + geom_smooth(size=2.5,method = lm, se=FALSE, fullrange=FALSE)+ scale_color_manual(values=colpalette2) +facet_grid(~Sex) +theme_bw()
+
+#linear trends between normalized soil pH and time (in ADH) for all donors within respective placement seasons - colored by BMI
+ggplot(TOX_data_donor, aes(x=ADH, y=pH_LRR, group=Donor, color=BMI)) + geom_point(size=3) + geom_smooth(size=2.5,method = lm, se=FALSE, fullrange=FALSE)+ scale_color_viridis() +facet_grid(~Season) +theme_bw()
+
+#linear trends between normalized soil pH and time (in ADH) for all donors within respective placement seasons - colored by BMI categories
+ggplot(TOX_data_donor, aes(x=ADH, y=pH_LRR, group=BMI_code, color=BMI_code)) + geom_point(size=3) + geom_smooth(size=2.5,method = lm, se=FALSE, fullrange=FALSE) +facet_grid(~Season) +theme_bw()
+
+#linear trends between normalized soil pH and time (in ADH) - colored by BMI categories
+ggplot(TOX_data_donor, aes(x=ADH, y=pH_LRR, group=BMI_code, color=BMI_code)) + geom_point(size=3) + geom_smooth(size=2.5,method = lm, se=TRUE, fullrange=FALSE) +theme_bw()
+
+#linear trends between normalized soil pH and time (in ADH), up to 5000 ADH - colored by BMI categories
+ggplot(TOX_data_5000_donor, aes(x=ADH, y=pH_LRR, group=BMI_code, color=BMI_code)) + geom_point(size=3) + geom_smooth(size=2.5,method = lm, se=TRUE, fullrange=FALSE) +theme_bw()
+```
+
+```{r, echo=FALSE}
+#raw and LM of each donor's pH LRR change over time for within each season
+ggplot(TOX_data_donor, aes(x=ADH, y=pH_LRR, group = Donor, colour=BMI)) + geom_point(size=3) + geom_smooth(size=2.5,method = lm, se=FALSE, fullrange=FALSE) + scale_color_viridis() +facet_grid(~Season) +theme_bw()
+
+ggplot(TOX_data_donor, aes(x=ADH, y=pH_LRR, group= Donor, colour=BMI)) + geom_point(size=3) + geom_line(size=2.5)+ scale_color_viridis() +facet_grid(~Season) +theme_bw()
+```
+
+```{r, include=FALSE}
+pHlrr_int =  lmer(pH_LRR ~ Season *ADH + (1|Donor),data=TOX_data_5000_donor) #random intercepts
+
+pHlrr_slope =  lmer(pH_LRR ~ Season *ADH + (0+ADH|Donor),data=TOX_data_5000_donor) #random slopes 
+
+pHlrr_ints =  lmer(pH_LRR ~ Season *ADH + (1+ADH|Donor),data=TOX_data_5000_donor) #random slopes and int
+
+#compare the 3 models for fit:
+anova(pHlrr_int, pHlrr_ints) #random slopes and int has lower AIC/BIC (-459 vs -510)
+anova(pHlrr_ints, pHlrr_slope) #random slopes and int has lower AIC/BIC (-510 vs -443)
+
+#Based on AIC, it seems that the random slope and int model provides the best fit; random int and slope AIC < random int AIC < random slope AIC
+
+#add in BMI
+pHlrr_BMI_int2=lmer(pH_LRR ~ ADH*BMI*Sex+Season + (1|Donor),data=TOX_data_5000_donor) #random int
+pHlrr_BMI_int2_aov=anova(pHlrr_BMI_int2) #use this model-try with BMI as categorical
+residual=residuals(pHlrr_BMI_int2)
+hist(residual)
+normalTest(residual, method="sw") #>.9 W stat is good
+
+plot_model(pHlrr_BMI_int2, type = "int")
+
+ggplot(TOX_data_donor, aes(x=BMI, y=pH_LRR, group = Sex, color=Sex)) + geom_point(size=3) + geom_smooth(size=2.5,method = lm, se=FALSE, fullrange=FALSE) +theme_bw()
+
+ggplot(TOX_data_donor, aes(x=ADH, y=pH_LRR, group = Sex, color=Sex)) + geom_point(size=3) + geom_smooth(size=2.5,method = lm, se=FALSE, fullrange=FALSE) +theme_bw()
+
+
+pHlrr_ints_cat = lmer(pH_LRR ~ ADH*BMI_code*Sex+Season+ (1|Donor),data=TOX_data_5000_donor) #random int, BMI as categorical; 4 categories fits the model better
+pHlrr_ints_cat_aov=anova(pHlrr_ints_cat)
+bl_2_res = residuals(pHlrr_ints_cat)
+hist(bl_2_res)
+normalTest(bl_2_res, method = "sw")
+BMI=pHlrr_ints_cat_aov[2,6]
+adh_bmi = pHlrr_ints_cat_aov[5,6]
+
+pHlrr_ints_cat5000 = lmer(pH_LRR ~ ADH*BMI_code*Sex+Season+ (1|Donor),data=TOX_data_5000_donor) #random int, BMI as categorical; 4 categories fits the model better
+anova(pHlrr_ints_cat5000)
+
+
+plot_model(pHlrr_ints_cat, type="int")
+plot_model(pHlrr_ints_cat, type="re")
+plot_model(pHlrr_ints_cat, type="slope")
+plot_model(pHlrr_ints_cat, type="resid")
+plot_model(pHlrr_ints_cat, type="diag") #check model assumptions
+
+#extract model coefficients:
+pHlrr_ints_cat_coef=as.matrix(coefficients(pHlrr_ints_cat))
+test=as.data.frame(pHlrr_ints_cat_coef[[1]])
+```
+
+LMER: pH_LRR ~ ADH x BMI_code x Sex + Season + (1|Donor)
+```{r, echo=FALSE}
+kable(pHlrr_ints_cat_aov, digits = 3)
+```
+
+Model predictions:
+```{r, echo=FALSE}
+plot_model(pHlrr_ints_cat, type="int")
+plot_model(pHlrr_ints_cat, type = "pred", terms = c("ADH", "BMI_code", "Sex"))
+```
+
+Model coefficients:
+```{r, echo=FALSE}
+kable(test)
+```
+
+
+When modeling pH and BMI, with BMI as a categorical (determined based on CDC levels) we see some interesting trends. First, ADH (p=`r round(pHlrr_ints_cat_aov[1,6],3)`), sex (p=`r round(pHlrr_ints_cat_aov[3,6],3)`), and season (p=`r round(pHlrr_ints_cat_aov[4,6],3)`) were did not display any primary effects. It is important to note that pH increased and decreased independent of these variables, and likely effects/masks some of these effects. Here BMI level results in a primary effect on pH (p=`r round(pHlrr_ints_cat_aov[2,6],3)`) and we can see these effects when looking at variable interactions. The mixed model predicts that low BMI individuals increase in pH, while moderate, high, and obese individuals decrease in pH (p=`r round(pHlrr_ints_cat_aov[5,6],3)`). There is also and effect between ADH, BMI level, and sex (p=`r round(pHlrr_ints_cat_aov[8,6],3)`). For females, the BMI/ADH trends similar to the overall model where low BMI individuals increase and the other 3 BMI levels decrease. For males, the effect of BMI wasn't as pronounced, however the model predicts moderate pH increases for low and moderate BMI individuals and pH decreases for high and obese individuals. As there are only 2 subjects in the "low BMI" group and they divided between sexes, this effect needs to be evaluated with a larger dataset. 
+
+
+If we look at the over all change (delta) of pH change over time, overall change in pH over active decomposition, and max pH difference, do these values differ based on BMI?
+
+```{r, include=FALSE}
+pH_delta = TOX_data_donor %>% filter(ADH == "0") %>% select(Donor, pH_LRR)
+pH_final = TOX_data_single_donor %>% select(Donor, pH_LRR)
+pH_delta = pH_delta %>% left_join(pH_final, by = "Donor")
+colnames(pH_delta) = c("Donor","inital_pH_LRR", "final_pH_LRR")
+pH_delta = pH_delta %>% mutate(delta = final_pH_LRR - inital_pH_LRR)
+
+pH_delta = pH_delta %>% select(Donor, delta)
+TOX_data_single_donor = TOX_data_single_donor %>% left_join(pH_delta, by = "Donor")
+
+pH_lrrd_num=lm(delta ~ BMI*Sex*Season+Age, data=TOX_data_single_donor) #numeric
+pH_lrrd_num_aov=anova(pH_lrrd_num)
+pH_lrrd_cat=lm(delta ~ BMI_code*Sex*Season+Age, data=TOX_data_single_donor) #categorical
+pH_lrrd_cat_aov=anova(pH_lrrd_cat)
+AIC(pH_lrrd_num)
+AIC(pH_lrrd_cat)
+
+plot_model(pH_lrrd_num, type = "pred", terms = c("BMI"))
+```
+
+BMI as a numeric:
+```{r, echo=FALSE}
+ggplot(TOX_data_single_donor, aes(x=Donor, y=delta, shape=Sex, fill=BMI)) + geom_bar(stat = "identity") + scale_fill_viridis() +facet_grid(~Season, scales = "free_x") +theme_bw()+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=.5))
+
+ggplot(TOX_data_single_donor, aes(x=BMI, y=delta, group=Sex, color=Sex)) + geom_point() +geom_smooth(method=lm) +facet_grid(~Season, scales = "free_x") +theme_bw()
+
+ggplot(TOX_data_single_donor, aes(x=BMI, y=delta, group=Season, color=Season)) + geom_point() +geom_smooth(method=lm) +theme_bw()
+```
+
+LM: pH_LRR_delta ~ BMI x Sex x Season + Age
+```{r, echo=FALSE}
+kable(pH_lrrd_num_aov, digits=3)
+```
+
+```{r, echo=FALSE}
+plot_model(pH_lrrd_num, type="pred")
+```
+
+BMI as a categorical:
+```{r, echo=FALSE}
+ggplot(TOX_data_single_donor, aes(x=Donor, y=delta, shape=Sex, color=BMI_code)) + geom_point(size=3)+facet_grid(~Season, scales = "free_x") +theme_bw()+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=.5))
+```
+
+
+LM: pH_LRR_delta ~ BMI_code x Sex x Season+Age
+```{r, echo=FALSE}
+kable(pH_lrrd_cat_aov, digits=3)
+```
+
+```{r, echo=FALSE}
+plot_model(pH_lrrd_cat, type="pred")
+```
+
+When looking at overall pH change as a function of both BMI as a numeric and BMI as a categorical, sex, season, and age are not significant. Similarly, in both models, there are no interactions between BMI, sex and season. When BMI is treatment as a numeric p=`r round(pH_lrrd_num_aov[1,5],3)`, but when BMI is a categorical with 4 BMI levels, p=`r round(pH_lrrd_cat_aov[1,5],3)`. Sex was not evenly distributed across seasons, therefore the addition of Sex to the numeric model may have resulted in sex being a trend (p=`r round(pH_lrrd_num_aov[2,5],3)`). Looking at the primary effects graph, we can see individuals 017 and 010 at the low end of pH delta and 008 and 018 and the high end of pH delta.
+
+```{r, echo=FALSE}
+ggplot(TOX_data_single_donor, aes(BMI,pH_LRR_delta))+ geom_text(aes(label=Donor))+geom_smooth(method = lm, se=FALSE, fullrange=FALSE, size=1.5)
+```
+
+Curious question: Does the number of drugs impact pH log response ratio delta? Answer: no
+
+```{r, echo=FALSE}
+ggplot(TOX_data_single_donor, aes(BMI,num_drugs))+ geom_text(aes(label=Donor))+geom_smooth(method = lm, se=FALSE, fullrange=FALSE, size=1.5)
+```
+
+## pH and LAP
+
+```{r, include=FALSE}
+mod=lmer(LAP_LRR ~ pH_LRR*ADH+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+pH=aov[1,6]
+library(rsq)
+rsq(mod)
+
+mod_res = residuals(mod)
+hist(mod_res)
+normalTest(mod_res, method="sw") #good model fit
+
+LAP_data = TOX_data_donor %>%
+  filter(LAP_LRR != "NA")
+
+LAP= LAP_data %>%
+  select(pH_LRR, LAP_LRR)
+
+LAP=as.matrix(LAP)
+
+library(Hmisc)
+LAP_corr=rcorr(LAP, type="spearman")
+LAP_corr$P
+
+cor(LAP_data$pH_LRR, LAP_data$LAP_LRR)
+LAP_ph=cor.test(LAP_data$pH_LRR, LAP_data$LAP_LRR)
+LAP_ph_p=LAP_ph$p.value
+LAP_ph_r=LAP_ph$estimate
+```
+
+LMER: LAP_LRR ~ pH_LRR+ADH+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits=3)
+```
+
+```{r, echo=FALSE}
+ggplot(TOX_data_donor, aes(pH_LRR, LAP_LRR))+ geom_point(stat="identity", size=3)+geom_smooth(method = lm, se=FALSE, fullrange=FALSE, size=1.5)
+```
+
+pH LRR and LAP LRR are positively correlated (r = `r LAP_ph$estimate`, p = `r LAP_ph$p.value`).
+
+## pH and illness categories (linear mixed effpHts models and Wilcoxon tests)
+
+### pH and cancer:
+```{r, include=FALSE}
+mod = lmer(pH_LRR ~ ADH*BMI*Cancer + (1|Donor), data = TOX_data_5000_donor)
+summary(mod) 
+aov=anova(mod)
+```
+
+LMER: pH_LRR ~ ADH * BMI * Cancer + (1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+### pH and diabetes:
+```{r, include=FALSE}
+mod = lmer(pH_LRR ~ ADH*BMI*Diabetes + (1|Donor), data = TOX_data_5000_donor)
+summary(mod) 
+aov=anova(mod)
+```
+
+LMER: pH_LRR ~ ADH * BMI * Diabetes + (1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Note: while significant, there are only 2 individuals in the diabetes group.
+
+### pH and Respiratory:
+```{r, include=FALSE}
+mod = lmer(pH_LRR ~ ADH*BMI*Respiratory+(1|Donor), data = TOX_data_5000_donor)
+summary(mod) 
+aov=anova(mod)
+```
+
+LMER: pH_LRR ~ ADH * BMI * Respiratory + (1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+### pH and Cardiovascular:
+```{r, include=FALSE}
+mod = lmer(pH_LRR ~ ADH*BMI*Cardio + (1|Donor), data = TOX_data_5000_donor)
+summary(mod) 
+aov=anova(mod)
+```
+
+LMER: pH_LRR ~ ADH * BMI * Cardio + (1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+### pH and neurological:
+```{r, include=FALSE}
+mod <- lmer(pH_LRR ~ ADH*BMI*Neuro + (1|Donor), data = TOX_data_5000_donor)
+summary(mod) 
+aov=anova(mod)
+plot_model(mod, type = "int")
+
+ggplot(TOX_data_5000_donor, aes(x=ADH, y=pH_LRR, group=Neuro, color=Neuro))+geom_point(size=3)+geom_smooth(method = "lm")
+```
+
+
+LMER: pH_LRR ~ ADH * BMI* Neuro + (1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+# EC models
+
+```{r, include=FALSE}
+EC=TOX_data_donor %>% select("Sample","Donor","ADH", "Percent_ADH","EC_LRR", "BMI")
+EC_long=melt(EC, id=c("Sample","Donor", "BMI", "EC_LRR"))
+```
+
+```{r, echo=FALSE}
+#plot EC log response ratio time (both ADH and percent ADH)
+ggplot(EC_long, aes(x=value, y=EC_LRR, color=BMI, group=Donor))+geom_line(stat = "identity", size=1)+facet_wrap(~variable, scales = "free_x")
+```
+
+First, check for normality 
+```{r, include=FALSE}
+normalTest(TOX_data_donor$EC_LRR, method = "da")
+normalTest(TOX_data$EC, method = "da")
+normalTest(TOX_data_single_donor$EC_LRR_slope, method = "sw")
+```
+
+EC log response ratio (omnibus = <0.001), raw EC (omnibus = <0.001), and EC slope (p= <0.001) are all not normal. 
+
+```{r, echo=FALSE}
+hist(TOX_data_donor$EC_LRR)
+hist(TOX_data$EC)
+hist(TOX_data_single_donor$EC_LRR_slope)
+```
+
+First model: is the EC of decomposition soils different from control soils?
+
+```{r,include=FALSE}
+#Hierarchical models:
+EC_int = lmer(EC ~ ADH*Treatment*Season+(1|Donor)+(1|Donor:Treatment), data=TOX_data_5000) #random intercept model
+
+EC_slope =  lmer(EC ~ ADH*Treatment*Season + (0+ ADH|Donor)+(0+ADH|Donor:Treatment),data=TOX_data_5000) #random slope model
+
+EC_intslope =  lmer(EC ~ ADH*Treatment*Season + (1|Donor) + (1+ADH|Donor:Treatment), data=TOX_data_5000) #random intercept and random slope model
+
+anova(EC_int, EC_slope) #models are statistically the same, but AIC lower for slope mod (5967 vs 5680)
+anova(EC_intslope, EC_slope) #basically no difference: 5680 vs 5692
+#will move forward evaluating the ints and random slope model
+
+#EC_res=residuals(EC_slope)
+#hist(EC_res)
+#normalTest(EC_res, method="SW")
+
+summary(EC_intslope)
+EC_intslope_aov=anova(EC_intslope)
+EC_intslope_raov=ranova(EC_intslope)
+```
+
+LMER: EC ~ ADH*Treatment+Season + (0+ ADH|Donor)+(0+ADH|Donor:Treatment)
+```{r, echo=FALSE}
+kable(EC_intslope_aov, digits = 3)
+```
+
+```{r, echo=FALSE}
+plot_model(EC_intslope, type="int")
+```
+
+
+For raw EC values, there is a difference in EC change over time in control compared to change in decomposition soils (p=`r round(EC_intslope_aov[5,6],3)`), whereby controls stay constant over time, while EC increases in decomposition soils. Season, however, did not lead to differences in EC over time (p=`r round(EC_intslope_aov[5,6],3)`). Next, we will look at the normalized values.
+
+Q: do controls change over time or differ by season? Answer: NO
+```{r,include=FALSE}
+TOX_data_5000_control = TOX_data_5000 %>% filter(Treatment == "control")
+EC_slope_c =  lmer(EC ~ ADH*Season + (0+ADH|Donor),data=TOX_data_5000_control) 
+aov=anova(EC_slope_c)
+```
+
+LMER: EC (controls only)~ ADH*Season + (0+ADH|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+```{r, echo=FALSE}
+ggplot(TOX_data_5000_control, aes(x=ADH, y=EC))+geom_point()+geom_smooth(method=lm)+facet_grid(~Season)
+```
+
+
+Q: ADH a driver of EC in decomposition soils only? Yes, and no differnce obseved with season
+```{r,include=FALSE}
+EC_slope_d =lmer(EC ~ ADH*Season + (0+ ADH|Donor),data=TOX_data_5000_donor) 
+aov=anova(EC_slope_d)
+```
+
+LMER: EC (donor only) ~ ADH*Season + (0+ ADH|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+
+Second model: Does normalized (log response ratio) EC change over time and/or differ by season?
+
+```{r, include=FALSE}
+EClrr_int =  lmer(EC_LRR ~ ADH *Season + (1|Donor),data=TOX_data_5000_donor) #random intercepts
+
+EClrr_slope =  lmer(EC_LRR ~ ADH *Season + (0+ADH|Donor),data=TOX_data_5000_donor) #random slopes 
+
+EClrr_ints =  lmer(EC_LRR ~ ADH *Season + (1+ADH|Donor),data=TOX_data_5000_donor) #random slopes and int
+
+anova(EClrr_int, EClrr_slope) #463 vs 445
+anova(EClrr_slope, EClrr_ints) #445 vs 446; mods are basically the same, well move forward with the simpler model (random slopes)
+
+EClrr_slope_aov=anova(EClrr_slope)
+```
+
+LMER: EC_LRR ~ ADH *Season + (1+ADH|Donor)
+```{r, echo=FALSE}
+kable(EClrr_slope_aov, digits = 3)
+```
+
+Normalized EC values change with time (p=`r round(EClrr_slope_aov[1,6],3)`), but changes over time do not differ by season when looking at the interaction term (p=`r round(EClrr_slope_aov[3,6],3)`) or main effects (p=`r round(EClrr_slope_aov[2,6],3)`).
+
+Next, we want to see if BMI or sex impacts soil EC response in decomposition soils. First, I will look at all EC LRR values and run a hierarchical linear model using adding BMI to the random intercept/slope model.
+
+```{r, include=FALSE}
+EClrr_slope_num = lmer(EC_LRR ~ ADH*BMI*Sex+Season+ (0+ADH|Donor),data=TOX_data_5000_donor)
+anova(EClrr_slope_num)
+
+EClrr_slope_cat = lmer(EC_LRR ~ ADH*BMI_code*Sex+Season+ (0+ADH|Donor),data=TOX_data_5000_donor) #random slp, BMI as categorical; 4 categories fits the model better
+EClrr_slope_cat_aov=anova(EClrr_slope_cat)
+
+anova(EClrr_slope_cat,EClrr_slope_num)
+
+EClrr_slope_cat_aov=anova(EClrr_slope_cat)
+```
+
+LMER: EC_LRR ~ ADH x BMI_code x Sex+Season+ (0+ADH|Donor)
+```{r, echo=FALSE}
+kable(EClrr_slope_cat_aov, digits = 3)
+```
+
+```{r, echo=FALSE}
+plot_model(EClrr_slope_cat, type="pred")
+```
+
+```{r, echo=FALSE}
+plot_model(EClrr_slope_cat, type="int")
+```
+
+In this model, EC changes with time and a general trend was observed between BMI levels, where EC values were higher for low BMI individuals. The change in EC over time is not impacted by the subject's BMI, or sex. 
+
+```{r, echo=FALSE}
+ggplot(TOX_data_5000_donor, aes(ADH,EC_LRR,group=BMI_code,color=BMI_code))+geom_point()+geom_smooth(method=lm)
+```
+
+## EC and illness categories (linear mixed effects models and Wilcoxon tests)
+
+### EC and cancer:
+```{r, include=FALSE}
+mod = lmer(EC_LRR ~ ADH*Cancer +(0+ADH|Donor), data = TOX_data_5000_donor)
+summary(mod) 
+aov=anova(mod)
+```
+
+LMER: EC_LRR ~ ADH x Cancer + (0+ADH|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+### EC and diabetes:
+```{r, include=FALSE}
+mod = lmer(EC_LRR ~ ADH*Diabetes + (0+ADH|Donor), data = TOX_data_5000_donor)
+summary(mod) 
+aov=anova(mod)
+```
+
+LMER: EC_LRR ~ ADH * Diabetes + (0+ADH|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+### EC and Respiratory:
+```{r, include=FALSE}
+mod = lmer(EC_LRR ~ ADH*Respiratory + (0+ADH|Donor), data = TOX_data_5000_donor)
+summary(mod) 
+aov=anova(mod)
+```
+
+LMER: EC_LRR ~ ADH * Respiratory + (0+ADH|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+### EC and Cardiovascular:
+```{r, include=FALSE}
+mod = lmer(EC_LRR ~ ADH*Cardio + (0+ADH|Donor), data = TOX_data_5000_donor)
+summary(mod) 
+aov=anova(mod)
+```
+
+LMER:EC_LRR ~ ADH * Cardio + (0+ADH|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+### EC and neurological:
+```{r, include=FALSE}
+mod = lmer(EC_LRR ~ ADH * Neuro + (0+ADH|Donor), data = TOX_data_5000_donor)
+summary(mod) 
+aov=anova(mod)
+```
+
+LMER:EC_LRR ~ ADH * Neuro + (0+ADH|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+# EEA models:
+
+```{r, include=FALSE}
+EEA=TOX_data_donor %>% filter(BG_LRR !="NA")%>% select("Sample","Donor","ADH","BG_LRR","NAG_LRR","PHOS_LRR","LAP_LRR","BMI")
+EEA_long=melt(EEA, id=c("Sample","Donor","ADH","BMI"))
+
+#EEA raw data line plot 
+EEA_all = TOX_data %>% filter(BG_avg !="NA")%>% select("Sample","Donor", "Treatment","ADH","Percent_ADH", "BG_avg","BG_LRR", "NAG_avg","NAG_LRR","PHOS_avg","PHOS_LRR", "LAP_avg","LAP_LRR")
+
+EEA_avg = EEA_all %>% select(-"BG_LRR", -"NAG_LRR",-"PHOS_LRR", -"LAP_LRR")
+EEA_avg_long = melt(EEA_avg, id=c("Sample", "Donor", "Treatment", "ADH", "Percent_ADH"))
+  
+ggplot(data=EEA_avg_long, aes(x=Percent_ADH, y=value, color=Donor))+geom_line(size=1.5) +facet_grid(variable~Treatment, scales = "free")+scale_color_manual(values=colpalette2)+labs(x="Percent Accumulated Degree Hours (ADH)",y="Raw Values")+theme_bw()
+
+#EEA LRR line plot
+EEA_lrr = EEA_all %>% filter(Treatment == "donor") %>% select(-"BG_avg", -"NAG_avg",-"PHOS_avg", -"LAP_avg")
+EEA_lrr_long = melt(EEA_lrr, id=c("Sample", "Donor", "Treatment", "ADH", "Percent_ADH"))
+
+ggplot(data=EEA_lrr_long, aes(x=Percent_ADH, y=value, color=Donor))+geom_line(size=1.5) +facet_grid(~variable, scales = "free")+scale_color_manual(values=colpalette2)+labs(x="Percent Accumulated Degree Hours (ADH)")+theme_bw()
+
+```
+
+```{r, echo=FALSE}
+ggplot(EEA_long, aes(x=ADH, y=value, color=BMI, group=Donor))+geom_line(stat = "identity", size=1)+facet_wrap(~variable, scales = "free_x")
+```
+
+
+First, check for normality 
+```{r, include=FALSE}
+#BG
+normalTest(TOX_data_donor$BG_LRR, method = "da") #normal
+
+#NAG
+normalTest(TOX_data_donor$NAG_LRR, method = "da") #normal
+
+#PHOS
+normalTest(TOX_data_donor$PHOS_LRR, method = "da") #normal
+
+#LAP
+normalTest(TOX_data_donor$LAP_LRR, method = "da") #normal
+
+TOX_data_donor_na = TOX_data_donor %>% filter(BG_LRR != "NA")
+```
+
+## BG models:
+
+```{r, include=FALSE}
+#does BG activity differ between control and decomposition soils?
+TOX_data_5000_eea = TOX_data_5000 %>% filter(BG_avg != "NA")
+
+BGint=lmer(BG_avg ~ Treatment*Season*ADH + (1|Donor) + (1|Donor:Treatment), data=TOX_data_5000_eea)
+BGints=lmer(BG_avg ~ Treatment*Season*ADH + (1|Donor) + (1+ADH|Donor:Treatment), data=TOX_data_5000_eea)
+BGslope=lmer(BG_avg ~ ADH*Treatment*Season + (0+ADH|Donor) + (0+ADH|Donor:Treatment), data=TOX_data_5000_eea)
+
+anova(BGint, BGslope) #1980 vs 2015
+anova(BGint, BGints) #1980 vs 1977
+#use random int and slope
+
+BGints_aov=anova(BGints)
+```
+
+LMER: BG_avg ~ Treatment * Season * ADH + (1|Donor) + (1+ADH|Donor:Treatment)
+```{r, echo=FALSE}
+kable(BGints_aov, digits = 3)
+```
+
+
+
+```{r, include=FALSE}
+#Does BG activity log response ratio differ over 5000 ADH?
+TOX_data_5000_donor_na = TOX_data_5000_donor %>% filter(BG_LRR != "NA")
+mod=lm(BG_LRR~ADH*BMI_code*Sex+Season, data=TOX_data_donor_na)
+AIC(mod) #205
+
+BGlrr_int=lmer(BG_LRR~ADH*BMI_code*Sex+Season +(1|Donor), data=TOX_data_5000_donor_na)
+BGlrr_slope=lmer(BG_LRR~ADH*BMI_code*Sex*Season +(0+ADH|Donor), data=TOX_data_5000_donor_na)
+BGlrr_ints=lmer(BG_LRR~ADH*BMI_code*Sex*Season +(1+ADH|Donor), data=TOX_data_5000_donor_na)
+
+anova(BGlrr_int, BGlrr_slope) #no difference; AIC 202 vs 207
+anova(BGlrr_int, BGlrr_ints) #no difference; AIC 202 vs AIC 208
+#use random int
+
+BGlrr_int_aov=anova(BGlrr_int)
+test=coefficients(BGlrr_int)
+test=as.data.frame(test[[1]])
+
+```
+
+LMER: BG_LRR~ADH x BMI_code x Sex + Season +(1|Donor)
+```{r, echo=FALSE}
+kable(BGlrr_int_aov, digits = 3)
+```
+
+```{r, echo=FALSE}
+plot_model(BGlrr_int, type="pred")
+```
+
+Models predict a slight increase in BG activity as ADH increases, but no factors were significant.
+
+```{r, include=FALSE}
+mod2=lm(BG_LRR_delta~BMI_code*Season*Sex, TOX_data_single_donor)
+summary(mod2)
+aov=anova(mod2)
+
+```
+
+LM: BG_LRR_delta~BMI_code * Season * Sex
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+```{r, echo=FALSE}
+plot_model(mod2, type="pred")
+plot_model(mod2, type = "int")
+```
+
+Overall change in BG was not significantly impacted by BMI category, season, or sex. However, BMI category, BMI cat:season and season:sex were close. 
+
+Q: Was BG impacted by the number of drugs?
+```{r, include=FALSE}
+mod=lmer(BG_LRR ~ADH*num_drugs+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: BG_LRR ~ADH (5000) x num_drugs + (1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+BG was not impacted by the number of drugs detected in blood serum at time of death (p=`r round(aov[2,6],3)`).
+
+### BG x illnesses:
+
+Cancer:
+```{r, include=FALSE}
+mod=lmer(BG_LRR ~ADH*Cancer+(1|Donor), data=TOX_data_5000_donor_na)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: lmer(BG_LRR ~ADH (5000) x Cancer+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Diabetes:
+```{r, include=FALSE}
+mod=lmer(BG_LRR ~ADH*Diabetes+(1|Donor), data=TOX_data_5000_donor_na)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: BG_LRR ~ADH (5000) x Diabetes+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+
+Cardio:
+```{r, include=FALSE}
+mod=lmer(BG_LRR ~ADH*Cardio+(1|Donor), data=TOX_data_5000_donor_na)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: BG_LRR ~ADH (5000) x Cardio+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Respiratory:
+```{r, include=FALSE}
+mod=lmer(BG_LRR ~ADH*Respiratory+(1|Donor), data=TOX_data_5000_donor_na)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: BG_LRR ~ADH (5000) x Respiratory+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+
+Neurological:
+```{r, include=FALSE}
+mod=lmer(BG_LRR ~ADH*Neuro+(1|Donor), data=TOX_data_5000_donor_na)
+summary(mod)
+aov=anova(mod) #note, for plotting purposes, na's must be removed, but you get the same p-values with or without removing nas from the dataframe.
+BGNeuro=aov[2,6]
+```
+
+LMER: BG_LRR ~ADH (5000) x Neuro+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+All illness categories but neuro, were not significant. 
+
+```{r, echo=FALSE}
+ggplot(TOX_data_donor_na, aes(ADH, BG_LRR, group=Donor, color=Neuro))+geom_line(stat="identity", size=1)
+```
+
+
+## NAG Models: 
+```{r, echo=FALSE}
+ggplot(TOX_data_5000_donor, aes(x=ADH, y=NAG_LRR, group=BMI_code, color=BMI_code))+geom_point()+geom_smooth(method=loess)+facet_grid(~Season)+theme_bw()
+```
+
+```{r, include=FALSE}
+#Did NAG activity differ between control and decomposition soils?
+NAGint=lmer(NAG_avg ~ Treatment*Season*ADH + (1|Donor) + (1|Donor:Treatment), data=TOX_data_5000_eea)
+NAGints=lmer(NAG_avg ~ Treatment*Season*ADH + (1|Donor) + (1+ADH|Donor:Treatment), data=TOX_data_5000_eea)
+NAGslope=lmer(NAG_avg ~ ADH*Treatment*Season + (0+ADH|Donor) + (0+ADH|Donor:Treatment), data=TOX_data_5000_eea)
+
+anova(NAGint, NAGslope) #1776 vs 1772
+anova(NAGslope, NAGints) #1772 vs 1771
+#use random int and slope
+
+NAGints_aov=anova(NAGints)
+```
+
+LMER: NAG_avg ~ Treatment * Season * ADH + (1|Donor) + (1+ADH|Donor:Treatment)
+```{r, echo=FALSE}
+kable(NAGints_aov, digits = 3)
+```
+
+```{r, include=FALSE}
+#Did NAG LRR change over 5000 ADH?
+mod=lmer(NAG_LRR ~ADH+Season+BMI+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+ADH=aov[1,6]
+Season=aov[2,6]
+BMI=aov[3,6]
+
+mod=lm(NAG_LRR~ADH*BMI_code*Sex+Season, data=TOX_data_5000_donor_na)
+AIC(mod) #211
+
+NAGlrr_int=lmer(NAG_LRR~ADH*BMI_code*Sex+Season +(1|Donor), data=TOX_data_5000_donor_na)
+NAGlrr_slope=lmer(NAG_LRR~ADH*BMI_code*Sex+Season +(0+ADH|Donor), data=TOX_data_5000_donor_na)
+NAGlrr_ints=lmer(NAG_LRR~ADH*BMI_code*Sex+Season +(1+ADH|Donor), data=TOX_data_5000_donor_na)
+
+anova(NAGlrr_int, NAGlrr_slope) #no difference; AIC 167 vs 170
+anova(NAGlrr_int, NAGlrr_ints) #no difference; AIC 167 vs AIC 171
+#use random int
+
+NAG_int_res = residuals(NAGlrr_int)
+NAG_ints_res = residuals(NAGlrr_ints) #these models are very close; move forward with random int mod as it produces a slightly better W statisic when running normality test on the residuals
+
+NAGlrr_int_aov=anova(NAGlrr_int)
+test=coefficients(NAGlrr_ints)
+test=as.data.frame(test[[1]])
+
+```
+
+LMER: NAG_LRR~ADH (5000 max.) x BMI_code x Sex + Season + (1|Donor)
+```{r, echo=FALSE}
+kable(NAGlrr_int_aov, digits = 3)
+```
+
+```{r, echo=FALSE}
+plot_model(NAGlrr_int, type="int")
+```
+
+The model predicts that NAG changes differently over time between BMI level groups. For sex, the model predicts that NAG increases slightly in soils around female subjects, while NAG decreases for males. The interaction term for ADH:BMI:Sex was significant as well. This appears to be driven by differences between BMI levels in male subjects, while no differences were observed between BMI levels in female subjects. Similar to pH, there are only 2 subjects in the Low and High BMI categories. While the interaction term was significant, it is based in 1 male and 1 female each in the low and high groups. This effect needs to be explored further to determine true effects.
+
+Q: Was NAG impacted by the number of drugs?
+```{r, include=FALSE}
+mod=lmer(NAG_LRR ~ADH*num_drugs+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+ND=aov[2,6]
+```
+
+LMER: lmer(NAG_LRR ~ADH (5000) +num_drugs+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+NAG was not impacted by the number of drugs detected in blood serum at time of death (p=`r round(ND,3)`).
+
+### NAG x illnesses:
+
+Cancer:
+```{r, include=FALSE}
+mod=lmer(NAG_LRR ~ADH*Cancer+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: lmer(NAG_LRR ~ADH * Cancer+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Diabetes:
+```{r, include=FALSE}
+mod=lmer(NAG_LRR ~ADH*Diabetes+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: NAG_LRR ~ADH (5000) * Diabetes+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Cardio:
+```{r, include=FALSE}
+mod=lmer(NAG_LRR ~ADH*Cardio+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+NAGCar = aov[2,6]
+```
+
+LMER: NAG_LRR ~ADH (5000) * Cardio+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Respiratory:
+```{r, include=FALSE}
+mod=lmer(NAG_LRR ~ADH*Respiratory+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: NAG_LRR ~ADH (5000) x Respiratory+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Neurological:
+```{r, include=FALSE}
+mod=lmer(NAG_LRR ~ADH*Neuro+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: NAG_LRR ~ADH (5000) x Neuro+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+```{r, echo=FALSE}
+TOX_single_donor_na=TOX_data_single_donor %>% filter(BG_LRR_delta !="NA")
+ggplot(TOX_single_donor_na, aes(Cardio, NAG_LRR_delta, color=Cardio)) + geom_point(stat = "identity")
+```
+
+## PHOS Models: 
+```{r, include=FALSE}
+#Did PHOS acitivy differ between decomposition and control soils
+PHOSint=lmer(PHOS_avg ~ Treatment*Season*ADH + (1|Donor) + (1|Donor:Treatment), data=TOX_data_5000_eea)
+PHOSints=lmer(PHOS_avg ~ Treatment*Season*ADH + (1|Donor) + (1+ADH|Donor:Treatment), data=TOX_data_5000_eea)
+PHOSslope=lmer(PHOS_avg ~ ADH*Treatment*Season + (0+ADH|Donor) + (0+ADH|Donor:Treatment), data=TOX_data_5000_eea)
+
+anova(PHOSint, PHOSslope) #2371 vs 2368
+anova(PHOSslope, PHOSints) #2368 vs 2374
+#use random slope
+
+PHOSslope_aov=anova(PHOSslope)
+```
+
+LMER: PHOS_avg ~ ADH * Treatment * Season + (0+ADH|Donor) + (0+ADH|Donor:Treatment)
+```{r, echo=FALSE}
+kable(PHOSslope_aov, digits = 3)
+```
+
+
+```{r, include=FALSE}
+#Did PHOS LRR values change over 5000 ADH?
+mod=lmer(PHOS_LRR ~ADH+Season+BMI+(1|Donor), data=TOX_data_donor)
+summary(mod)
+aov=anova(mod)
+ADH=aov[1,6]
+Season=aov[2,6]
+BMI=aov[3,6]
+
+PHOSlrr_int_5000=lmer(PHOS_LRR~ADH*BMI_code*Sex+Season +(1|Donor), data=TOX_data_5000_donor_na)
+PHOSlrr_slope_5000=lmer(PHOS_LRR~ADH*BMI_code*Sex+Season +(0+ADH|Donor), data=TOX_data_5000_donor_na)
+PHOSlrr_ints_5000=lmer(PHOS_LRR~ADH*BMI_code*Sex+Season +(1+ADH|Donor), data=TOX_data_5000_donor_na)
+
+anova(PHOSlrr_int_5000, PHOSlrr_slope_5000) #no difference; AIC 146 vs 149
+anova(PHOSlrr_int_5000, PHOSlrr_ints_5000) #no difference; AIC 146 vs AIC 150
+#random int fits data best
+
+PHOSlrr_int_5000_aov=anova(PHOSlrr_int_5000)
+
+PHOSlrr_int_5000b=lmer(PHOS_LRR~ADH*BMI_code*Sex+Season+ADH:Donor +(1|Donor), data=TOX_data_5000_donor_na)
+
+anova(PHOSlrr_int_5000,PHOSlrr_int_5000b)
+anova(PHOSlrr_ints_5000)
+```
+
+LMER: PHOS_LRR~ADH * BMI_code * Sex+Season +(1|Donor)
+```{r, echo=FALSE}
+kable(PHOSlrr_int_5000_aov, digits = 3)
+```
+
+PHOS log response ratio did not change with time (ADH p=`r round(PHOSlrr_int_5000_aov[1,6],3)`), and season (p=`r round(PHOSlrr_int_5000_aov[4,6],3)`), BMI level (p=`r round(PHOSlrr_int_5000_aov[2,6],3)`), and sex (p=`r round(PHOSlrr_int_5000_aov[3,6],3)`) did not significantly alter PHOS activity. No interactions were significant.
+
+Q: Was PHOS impacted by the number of drugs?
+```{r, include=FALSE}
+mod=lmer(PHOS_LRR~ADH*num_drugs +(1|Donor), data=TOX_data_5000_donor_na)
+summary(mod)
+aov=anova(mod)
+ND=aov[2,6]
+```
+
+LMER: lmer(PHOS_LRR ~ADH (5000 only) x num_drugs+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+PHOS was not impacted by the number of drugs detected in blood serum at time of death (p=`r round(ND,3)`).
+
+### PHOS x illnesses:
+
+Cancer:
+```{r, include=FALSE}
+mod=lmer(PHOS_LRR ~ADH*Cancer+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: PHOS_LRR ~ADH (5000 ADH) x Cancer + (1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Diabetes:
+```{r, include=FALSE}
+mod=lmer(PHOS_LRR ~ADH*Diabetes + (1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: PHOS_LRR ~ADH (5000 only) x Diabetes + (1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Cardio:
+```{r, include=FALSE}
+mod=lmer(PHOS_LRR ~ADH*Cardio+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: PHOS_LRR ~ADH (5000 only) x Cardio + (1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Respiratory:
+```{r, include=FALSE}
+mod=lmer(PHOS_LRR ~ADH*Respiratory+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: PHOS_LRR ~ADH (5000 only) x Respiratory+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Neurological:
+```{r, include=FALSE}
+mod=lmer(PHOS_LRR ~ADH*Neuro+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: PHOS_LRR ~ADH (5000 only) x Neuro + (1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+None of the linear mixed effects models with illness categories were found to be significant. While the linear mixed effects model with diabetes showed no significance, the t test shows that overall difference in PHOS during active decomposition differed between individuals with and without diabetes. However, this is likely due to large difference in treatment group sizes (n=2 vs n=17) No other illness categories were found to impact PHOS slope or delta.
+
+
+## LAP Models:
+
+```{r, include=FALSE}
+#Did LAP activity differ between control and decomposition soils?
+LAPint=lmer(LAP_avg ~ ADH*Treatment*Season + (1|Donor) + (1|Donor:Treatment), data=TOX_data_5000_eea)
+LAPints=lmer(LAP_avg ~ ADH*Treatment*Season + (1|Donor) + (1+ADH|Donor:Treatment), data=TOX_data_5000_eea)
+LAPslope=lmer(LAP_avg ~ ADH*Treatment*Season + (0+ADH|Donor) + (0+ADH|Donor:Treatment), data=TOX_data_5000_eea)
+
+anova(LAPint, LAPslope) #2204 vs 2215
+anova(LAPint, LAPints) #2204 vs 2213
+#use random int
+
+LAPint_aov=anova(LAPint)
+```
+
+LMER: LAP_avg ~ Treatment * Season * ADH + (1|Donor) + (1|Donor:Treatment)
+```{r, echo=FALSE}
+kable(LAPint_aov, digits = 3)
+```
+
+```{r, include=FALSE}
+#Did LAP LRR change over 5000 ADH?
+mod=lmer(LAP_LRR ~ADH*Season*BMI+(1|Donor), data=LAP_data)
+summary(mod)
+aov=anova(mod)
+ADH=aov[1,6]
+Season=aov[2,6]
+BMI=aov[3,6]
+
+LAPlrr_int_5000=lmer(LAP_LRR~ADH*BMI_code*Sex+Season +(1|Donor), data=TOX_data_5000_donor_na)
+LAPlrr_slope_5000=lmer(LAP_LRR~ADH*BMI_code*Sex+Season +(0+ADH|Donor), data=TOX_data_5000_donor_na)
+LAPlrr_ints_5000=lmer(LAP_LRR~ADH*BMI_code*Sex+Season +(1+ADH|Donor), data=TOX_data_5000_donor_na)
+LAPlrr_slope_5000b=lmer(LAP_LRR~ADH*pH_LRR*BMI_code*Sex+Season +(0+ADH|Donor), data=TOX_data_5000_donor_na) #addition of pH makes a better model
+
+anova(LAPlrr_int_5000, LAPlrr_slope_5000) #no difference; AIC 180 vs 165
+anova(LAPlrr_slope_5000, LAPlrr_ints_5000) #no difference; AIC 165 vs AIC 170
+#random slope fits data best
+
+LAPlrr_slope_5000_aov = anova(LAPlrr_slope_5000)
+LAPlrr_slope_5000b_aov = anova(LAPlrr_slope_5000b)
+
+LAPlrr_slope_5000_step = lmer(LAP_LRR ~ ADH + pH_LRR + BMI_code + Sex + (0 + ADH | Donor) + ADH:pH_LRR + ADH:BMI_code + pH_LRR:BMI_code + ADH:Sex + BMI_code:Sex + ADH:pH_LRR:BMI_code + ADH:BMI_code:Sex, data=TOX_data_5000_donor_na)
+anova(LAPlrr_slope_5000_step)
+anova(LAPlrr_slope_5000b, LAPlrr_slope_5000_step)
+
+LAPlrr_slope_5000_ph=lmer(LAP_LRR~ADH*pH_LRR*Sex+Season +(0+ADH|Donor), data=TOX_data_5000_donor_na)
+LAPlrr_slope_5000_ph_aov=anova(LAPlrr_slope_5000_ph)
+anova(LAPlrr_slope_5000, LAPlrr_slope_5000_ph)
+```
+
+LMER: LAP_LRR~ADH (5000 only) : BMI_code : Sex+Season +(0+ADH|Donor)
+```{r, echo=FALSE}
+kable(LAPlrr_slope_5000_aov, digits = 3)
+```
+
+```{r, echo=FALSE}
+plot_model(LAPlrr_slope_5000, type="int")
+```
+
+
+LMER: LAP_LRR~ADH (5000 only) x pH_LRR x Sex+Season +(0+ADH|Donor)
+```{r, echo=FALSE}
+kable(LAPlrr_slope_5000_ph_aov, digits = 3)
+```
+
+```{r, echo=FALSE}
+plot_model(LAPlrr_slope_5000_ph, type="pred")
+```
+
+
+In the BMI model, no variable was found to be significant. However, BMI level did display a trend whereby low BMI individuals observed increases in LAP activity over time while moderate, high, and obese groups decreased.
+
+
+```{r, echo=FALSE}
+ggplot(LAP_data, aes(ADH, LAP_LRR, group=Donor, color=BMI))+geom_line(stat = "identity",size=1)+scale_color_viridis()
+```
+
+
+```{r, include=FALSE}
+mod=lmer(LAP_LRR ~ADH*Season*pH_LRR+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+ADH=aov[1,6]
+Season=aov[2,6]
+pH_LRR=aov[3,6]
+```
+
+LMER: LAP_LRR ~ADH (5000) * Season * pH_LRR+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+There is a clear relationship between LAP response and pH response in decomposition soils (p=`r round(pH_LRR,3)`).
+
+```{r, echo=FALSE}
+ggplot(TOX_data_donor_na, aes(pH_LRR, LAP_LRR, group=Donor, color=BMI))+geom_point(stat = "identity", size=3)
+```
+
+
+Q: Was LAP impacted by the number of drugs?
+```{r, include=FALSE}
+mod=lmer(LAP_LRR ~ADH*num_drugs+(1|Donor), data=TOX_data_5000_donor_na)
+summary(mod)
+aov=anova(mod)
+ND=aov[2,6]
+```
+
+LMER: lmer(LAP_LRR ~ADH+num_drugs+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Interestingly, LAP was impacted by the number of drugs detected in blood serum at time of death (p=`r round(aov[3,6],3)`).
+
+```{r, echo=FALSE}
+ggplot(TOX_data_5000_donor_na, aes(num_drugs, LAP_LRR, group=Donor, color=BMI))+geom_point(stat = "identity", size=3)
+```
+
+### LAP x illnesses:
+
+Cancer:
+```{r, include=FALSE}
+mod=lmer(LAP_LRR ~ADH*Cancer+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: lmer(LAP_LRR ~ADH (5000)*Cancer+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Diabetes:
+```{r, include=FALSE}
+mod=lmer(LAP_LRR ~ADH*Diabetes+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: lmer(LAP_LRR ~ADH (5000)*Diabetes+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Cardio:
+```{r, include=FALSE}
+mod=lmer(LAP_LRR ~ADH*Cardio+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: lmer(LAP_LRR ~ADH (5000) * Cardio+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Respiratory:
+```{r, include=FALSE}
+mod=lmer(LAP_LRR ~ADH*Respiratory+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: lmer(LAP_LRR ~ADH (5000) * Respiratory+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Neurological:
+```{r, include=FALSE}
+mod=lmer(LAP_LRR ~ADH*Neuro+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: lmer(LAP_LRR ~ADH * Neuro+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+None of the linear mixed effects models with illness categories were found to be significant. While the linear mixed effects model with diabetes showed no significance, the t test shows that overall difference in LAP during active decomposition differed between individuals with and without diabetes. However, this is likely due to large difference in treatment group sizes (n=2 vs n=17) 
+
+# Resp models:
+
+```{r, include=FALSE}
+resp=TOX_data_donor %>% select("Sample","Donor","ADH", "Percent_ADH","LRR_resp", "BMI", "Season") %>% filter(LRR_resp != "NA") %>% filter(Donor != "TOX017") %>% filter(Donor != "TOX018") %>% filter(Donor != "TOX019")
+resp_long=melt(resp, id=c("Sample","Donor", "BMI", "Season" ,"LRR_resp"))
+```
+
+```{r, echo=FALSE}
+ggplot(resp_long, aes(x=value, y=LRR_resp, color=BMI, group=Donor))+geom_line(stat = "identity", size=1)+facet_wrap(~variable, scales = "free_x")
+```
+
+
+First, check for normality 
+```{r, include=FALSE}
+normalTest(TOX_data_donor$LRR_resp, method = "da")
+```
+
+Respiration Log Response Ratio is not normal (omnibus p < 0.001).
+
+```{r, echo=FALSE}
+hist(TOX_data_donor$LRR_resp)
+```
+
+```{r,include=FALSE}
+mod = lmer(LRR_resp ~ ADH + Season + (1|Donor), data = resp)
+summary(mod) 
+aov=anova(mod)
+
+Resplrr_int=lmer(LRR_resp~ADH*BMI_code*Sex+Season +(1|Donor), data=TOX_data_5000_donor_na)
+Resplrr_slope=lmer(LRR_resp~ADH*BMI_code*Sex+Season +(0+ADH|Donor), data=TOX_data_5000_donor_na)
+Resplrr_ints=lmer(LRR_resp~ADH*BMI_code*Sex+Season +(1+ADH|Donor), data=TOX_data_5000_donor_na)
+
+anova(Resplrr_int, Resplrr_slope) #156 vs 152
+anova(Resplrr_slope, Resplrr_ints) #152 vs 154
+
+summary(Resplrr_slope)
+Resplrr_slope_aov=anova(Resplrr_slope)
+#use random slope mod
+```
+
+LMER: LRR_resp~ADH (5000) * BMI_code * Sex+Season +(0+ADH|Donor)
+```{r, echo=FALSE}
+kable(Resplrr_slope_aov, digits = 3)
+```
+
+### Resp x illnesses:
+
+Cancer:
+```{r, include=FALSE}
+mod=lmer(LRR_resp ~ADH*Cancer+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+
+mod2=lmer(LRR_resp ~ADH*Cancer*Season+(1|Donor), data=TOX_data_5000_donor)
+summary(mod2)
+aov2=anova(mod2)
+```
+
+LMER: LRR_resp ~ADH * Cancer+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+LMER: LRR_resp ~ADH * Cancer * Season +(1|Donor)
+```{r, echo=FALSE}
+kable(aov2, digits = 3)
+```
+
+For the donors that have respiration values, 9 do not have cancer and 5 do.
+
+```{r, echo=FALSE}
+ggplot(TOX_data_5000_donor, aes(ADH, LRR_resp, group=Cancer, color=Cancer))+geom_point(size=3)+geom_smooth(method = lm)+theme_bw()
+```
+
+
+Diabetes:
+```{r, include=FALSE}
+mod=lmer(LRR_resp ~ADH*Diabetes+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: lmer(LRR_resp ~ADH (5000)*Diabetes+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Cardio:
+```{r, include=FALSE}
+mod=lmer(LRR_resp ~ADH*Cardio+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+
+mod2=lmer(LRR_resp ~ADH*Cardio*Season+(1|Donor), data=TOX_data_5000_donor)
+summary(mod2)
+aov2=anova(mod2)
+```
+
+LMER: lmer(LRR_resp ~ADH (5000) * Cardio+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Likely due to covariation with BMI (high BMI = greater resp)
+
+Respiratory:
+```{r, include=FALSE}
+mod=lmer(LRR_resp ~ADH*Respiratory+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: lmer(LRR_resp ~ADH (5000) * Respiratory+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Neurological:
+```{r, include=FALSE}
+mod=lmer(LRR_resp ~ADH*Neuro+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: lmer(LRR_resp ~ADH * Neuro+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+# 16S alpha diversity models:
+
+```{r, include=FALSE}
+bact=TOX_data_5000_donor %>% select("Sample","Donor","ADH", "Percent_ADH", "BMI", "Season", "Chao1_bact","InvSimp_bact") %>% filter(Chao1_bact != "NA")
+bact_long=melt(bact, id=c("Sample","Donor", "ADH", "Percent_ADH", "BMI", "Season"))
+
+ggplot(bact_long, aes(x=ADH, y=value, group=Donor, color=Donor)) +  geom_point(size=3) + geom_line(size=3) + scale_color_manual(values=colpalette2) + facet_wrap(~variable, scales = "free_y")+theme_bw()
+```
+
+```{r, echo=FALSE}
+ggplot(bact_long, aes(x=ADH, y=value, group=Donor, color=Donor)) +  geom_point(size=3) + geom_line(size=3) + scale_color_manual(values=colpalette2) + facet_wrap(~variable, scales = "free_y")+theme_bw()
+```
+
+```{r, echo=FALSE}
+ggplot(bact_long, aes(x=ADH, y=value, group=Donor, color=Donor)) + geom_smooth(method=lm, se=FALSE, size=3) + scale_color_manual(values=colpalette2) + facet_wrap(~variable, scales = "free_y")+theme_bw()
+```
+
+
+First, check for normality 
+```{r, include=FALSE}
+normalTest(TOX_data_5000_donor$Chao1_bact, method = "da")
+normalTest(TOX_data_5000_donor$InvSimp_bact, method = "da")
+TOX_data_5000_donor_seq = TOX_data_5000_donor %>% filter(InvSimp_bact != "NA")
+colnames(TOX_data_5000_donor_seq)[35] = "moisture"
+```
+
+Chao1 is normal (omnibus p = 0.72); Inverse Simpson is normal (omnibus p = 0.24)
+
+```{r, echo=FALSE}
+hist(TOX_data_5000_donor$Chao1_bact)
+hist(TOX_data_5000_donor$InvSimp_bact)
+```
+
+## 16S Chao1:
+
+```{r,include=FALSE}
+Chao1_bact_int=lmer(Chao1_bact~ADH*BMI_code*Sex+Season +(1|Donor), data=TOX_data_5000_donor)
+Chao1_bact_slope=lmer(Chao1_bact~ADH*BMI_code*Sex+Season +(0+ADH|Donor), data=TOX_data_5000_donor)
+Chao1_bact_ints=lmer(Chao1_bact~ADH*BMI_code*Sex+Season +(1+ADH|Donor), data=TOX_data_5000_donor)
+
+anova(Chao1_bact_int, Chao1_bact_slope) #1173 vs 1177
+anova(Chao1_bact_int, Chao1_bact_ints) #1173 vs 1177
+#use random int
+
+summary(Chao1_bact_int)
+Chao1_bact_int_aov=anova(Chao1_bact_int)
+#use random slope mod
+```
+
+```{r, echo=FALSE}
+kable(Chao1_bact_int_aov, digbact = 3)
+```
+
+### 16S Chao1 x illnesses (Primary effects):
+
+Number of drugs:
+```{r, include=FALSE}
+mod=lmer(Chao1_bact ~ADH*num_drugs+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: Chao1_bact~ADH * num_drugs + (1|Donor)
+```{r, echo=FALSE}
+kable(aov, digbact = 3)
+```
+
+Cancer:
+```{r, include=FALSE}
+mod=lmer(Chao1_bact ~ADH*Cancer+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: Chao1_bact ~ADH * Cancer+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digbact = 3)
+```
+
+```{r, echo=FALSE}
+plot_model(mod, type="pred", terms=c("ADH", "Cancer"))
+```
+
+```{r, echo=FALSE}
+ggplot(TOX_data_5000_donor, aes(ADH, Chao1_bact, group=Cancer, color=Cancer)) + geom_point(size=3) + geom_smooth(method = lm) + theme_bw()
+```
+
+
+Diabetes:
+```{r, include=FALSE}
+mod=lmer(Chao1_bact ~ADH*Diabetes+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: lmer(Chao1_bact ~ADH (5000)*Diabetes+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digbact = 3)
+```
+
+Cardio:
+```{r, include=FALSE}
+mod=lmer(Chao1_bact ~ADH*Cardio+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+
+mod2=lmer(Chao1_bact ~ADH*Cardio*Season+(1|Donor), data=TOX_data_5000_donor)
+summary(mod2)
+aov2=anova(mod2)
+```
+
+LMER: lmer(Chao1_bact ~ADH (5000) * Cardio+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digbact = 3)
+```
+
+Respiratory:
+```{r, include=FALSE}
+mod=lmer(Chao1_bact ~ADH*Respiratory+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+```{r, echo=FALSE}
+plot_model(mod, type="pred", terms=c("ADH", "Respiratory"))
+```
+
+```{r, echo=FALSE}
+ggplot(TOX_data_5000_donor, aes(ADH, Chao1_bact, group=Respiratory, color=Respiratory)) + geom_point(size=3) + geom_smooth(method = lm) + theme_bw()
+```
+
+LMER: lmer(Chao1_bact ~ADH (5000) * Respiratory+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digbact = 3)
+```
+
+Neurological:
+```{r, include=FALSE}
+mod=lmer(Chao1_bact ~ADH*Neuro+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: lmer(Chao1_bact ~ADH * Neuro+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digbact = 3)
+```
+
+```{r, echo=FALSE}
+plot_model(mod, type="pred", terms=c("ADH", "Neuro"))
+```
+
+```{r, echo=FALSE}
+ggplot(TOX_data_5000_donor, aes(ADH, Chao1_bact, group=Neuro, color=Neuro)) + geom_point(size=3) + geom_smooth(method = lm) + theme_bw()
+```
+
+```{r, include=FALSE}
+TOX_data_5000_donor_seq = TOX_data_5000_donor %>% filter(Chao1_bact != "NA")
+colnames(TOX_data_5000_donor_seq)[31]="moisture"
+
+ggplot(TOX_data_5000_donor_seq, aes(x=pH, y=Chao1_bact))+geom_point()+geom_smooth(method="loess")
+ph_r = lmer(Chao1_bact~ADH*pH + (1|Donor), data = TOX_data_5000_donor_seq)
+ph_r_aov=anova(ph_r)
+plot_model(ph_r, type = "pred")
+
+ggplot(TOX_data_5000_donor_seq, aes(x=pH, y=InvSimp_bact))+geom_point()+geom_smooth(method="loess")
+ggplot(TOX_data_5000_donor_seq, aes(x=ADH, y=InvSimp_bact))+geom_point()+geom_smooth(method="loess")
+ph_i = lmer(InvSimp_bact~ADH*pH_LRR + (1|Donor), data = TOX_data_5000_donor_seq)
+ph_i_aov=anova(ph_i)
+summary(ph_i) #InvSimp decreases with time (ADH) and pH
+
+ggplot(TOX_data_5000_donor_seq, aes(x=EC, y=Chao1_bact))+geom_point()+geom_smooth(method="loess")
+EC_r = lmer(Chao1_bact~ADH*EC + (1|Donor), data = TOX_data_5000_donor_seq)
+EC_r_aov=anova(EC_r) #Chao1 decreases with increasing EC and ADH
+ggplot(TOX_data_5000_donor_seq, aes(x=EC, y=InvSimp_bact))+geom_point()+geom_smooth(method="loess")
+EC_i = lmer(InvSimp_bact~ADH*EC + (1|Donor), data = TOX_data_5000_donor_seq)
+EC_i_aov=anova(EC_i)
+summary(EC_i)#diversity decreases with increaing EC and ADH
+
+ggplot(TOX_data_5000_donor_seq, aes(x=Evolved_CO2, y=Chao1_bact))+geom_point()+geom_smooth(method="loess")
+resp_r = lmer(Chao1_bact~ADH*Evolved_CO2 + (1|Donor), data = TOX_data_5000_donor_seq)
+resp_r_aov=anova(resp_r) #richness decreases with increasing respiration and ADH
+ggplot(TOX_data_5000_donor_seq, aes(x=Evolved_CO2, y=InvSimp_bact))+geom_point()+geom_smooth(method="loess")
+resp_i = lmer(InvSimp_bact~ADH*Evolved_CO2 + (1|Donor), data = TOX_data_5000_donor_seq)
+resp_i_aov=anova(resp_i)
+summary(resp_i) #diversity decreased with increasing respiration
+
+BG_r = lmer(Chao1_bact~ADH*BG_avg + (1|Donor), data = TOX_data_5000_donor_seq)
+BG_r_aov=anova(BG_r)
+BG_i = lmer(InvSimp_bact~ADH*BG_avg + (1|Donor), data = TOX_data_5000_donor_seq)
+BG_i_aov=anova(BG_i)
+
+NAG_r = lmer(Chao1_bact~ADH*NAG_avg + (1|Donor), data = TOX_data_5000_donor_seq)
+summary(NAG_r)
+NAG_r_aov=anova(NAG_r)
+NAG_i = lmer(InvSimp_bact~ADH*NAG_avg + (1|Donor), data = TOX_data_5000_donor_seq)
+NAG_i_aov=anova(NAG_i)
+
+ggplot(TOX_data_5000_donor_seq, aes(x=PH_avg, y=Chao1_bact))+geom_point()+geom_smooth(method="loess")
+PHOS_r = lmer(Chao1_bact~ADH*PHOS_avg + (1|Donor), data = TOX_data_5000_donor_seq)
+phos_r_aov=anova(PHOS_r)
+PHOS_i = lmer(InvSimp_bact~ADH*PHOS_avg + (1|Donor), data = TOX_data_5000_donor_seq)
+phos_i_aov=anova(PHOS_i)
+
+
+ggplot(TOX_data_5000_donor_seq, aes(x=LAP_avg, y=Chao1_bact))+geom_point()+geom_smooth(method="loess")
+LAP_r = lmer(Chao1_bact~ADH*LAP_avg + (1|Donor), data = TOX_data_5000_donor_seq)
+lap_r_aov=anova(LAP_r)
+ggplot(TOX_data_5000_donor_seq, aes(x=LAP_avg, y=InvSimp_bact))+geom_point()+geom_smooth(method="loess")
+LAP_i = lmer(InvSimp_bact~ADH*LAP_avg + (1|Donor), data = TOX_data_5000_donor_seq)
+lap_r_aov=anova(LAP_i)
+summary(LAP_i) #diversity decreases with increasing LAP
+plot_model(LAP_i, type="pred")
+
+gm_r = lmer(Chao1_bact~ADH*moisture + (1|Donor), data = TOX_data_5000_donor_seq)
+gm_r_aov=anova(gm_r)
+gm_i = lmer(InvSimp_bact~ADH*moisture + (1|Donor), data = TOX_data_5000_donor_seq)
+gm_i_aov=anova(gm_i)
+
+
+fullchem_mod_r = lmer(Chao1_bact~ADH*pH+ADH*EC+ADH*Evolved_CO2+ADH*BG_avg+ADH*NAG_avg+ADH*PHOS_avg+ADH*LAP_avg+ADH*moisture+(1|Donor), data = TOX_data_5000_donor_seq)
+summary(fullchem_mod_r)
+anova(fullchem_mod_r)
+plot_model(fullchem_mod_r, type="pred")
+#richness increased with increasing pH, decreased with increasin resp, decreased with increasing BG, and increased with increasing PHOS
+fullchem_mod_i = lmer(InvSimp_bact~ADH*pH+ADH*EC+ADH*Evolved_CO2+ADH*BG_avg+ADH*NAG_avg+ADH*PHOS_avg+ADH*LAP_avg+ADH*moisture+(1|Donor), data = TOX_data_5000_donor_seq)
+summary(fullchem_mod_i)
+anova(fullchem_mod_i)
+#diversity increases with increasing LAP activity
+```
+
+pH:
+
+LMER: Chao1_bact~ADH * pH + (1|Donor)
+```{r, echo=FALSE}
+kable(ph_r_aov, digits = 3)
+```
+
+EC:
+
+LMER: Chao1_bact~ADH * EC + (1|Donor)
+```{r, echo=FALSE}
+kable(EC_r_aov, digits = 3)
+```
+
+Resp:
+
+LMER: Chao1_bact~ADH * Evovled Co2 + (1|Donor)
+```{r, echo=FALSE}
+kable(resp_r_aov, digits = 3)
+```
+
+BG:
+
+LMER: Chao1_bact~ADH * BG_avg + (1|Donor)
+```{r, echo=FALSE}
+kable(BG_r_aov, digits = 3)
+```
+
+NAG:
+
+LMER: Chao1_bact~ADH *  NAG_avg + (1|Donor)
+```{r, echo=FALSE}
+kable(NAG_r_aov, digits = 3)
+```
+
+PHOS:
+
+LMER: Chao1_bact~ADH * PHOS_avg + (1|Donor)
+```{r, echo=FALSE}
+kable(phos_r_aov, digits = 3)
+```
+
+LAP:
+
+LMER: Chao1_bact~ADH * LAP_avg + (1|Donor)
+```{r, echo=FALSE}
+kable(lap_r_aov, digits = 3)
+```
+
+Gravimetric moisture:
+
+LMER: Chao1_bact~ADH *moisture + (1|Donor)
+```{r, echo=FALSE}
+kable(gm_r_aov, digits = 3)
+```
+
+## 16S InvSimp:
+
+```{r,include=FALSE}
+InvSimp_bact_int=lmer(InvSimp_bact~ADH*BMI_code*Sex+Season +(1|Donor), data=TOX_data_5000_donor)
+InvSimp_bact_slope=lmer(InvSimp_bact~ADH*BMI_code*Sex+Season +(0+ADH|Donor), data=TOX_data_5000_donor)
+InvSimp_bact_ints=lmer(InvSimp_bact~ADH*BMI_code*Sex+Season +(1+ADH|Donor), data=TOX_data_5000_donor)
+
+anova(InvSimp_bact_int, InvSimp_bact_slope) #917 vs 917
+anova(InvSimp_bact_int, InvSimp_bact_ints) #917 vs 921
+#use random int
+
+summary(InvSimp_bact_int)
+InvSimp_bact_int_aov=anova(InvSimp_bact_int)
+#use random slope mod
+```
+
+```{r, echo=FALSE}
+kable(InvSimp_bact_int_aov, digbact = 3)
+```
+
+```{r, echo=FALSE}
+plot_model(InvSimp_bact_int, type = "pred", terms = c("ADH", "BMI_code"))
+```
+
+```{r, echo=FALSE}
+ggplot(TOX_data_5000_donor, aes(ADH, InvSimp_bact, group=BMI_code, color=BMI_code))+geom_point(size=3)+geom_smooth(method=lm, size=2)+facet_grid(~Season)+theme_bw()
+
+ggplot(TOX_data_5000_donor, aes(ADH, InvSimp_bact, group=BMI_code, color=BMI_code))+geom_point(size=3)+geom_smooth(method=lm, size=2)+theme_bw()
+```
+
+### 16S InvSimp x illnesses (Primary effects):
+
+Number of drugs:
+```{r, include=FALSE}
+mod=lmer(InvSimp_bact ~ADH*num_drugs+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: InvSimp_bact ~ADH * num_drugs + (1|Donor)
+```{r, echo=FALSE}
+kable(aov, digbact = 3)
+```
+
+Cancer:
+```{r, include=FALSE}
+mod=lmer(InvSimp_bact ~ADH*Cancer+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: InvSimp_bact ~ADH * Cancer+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digbact = 3)
+```
+
+```{r, echo=FALSE}
+plot_model(mod, type="pred", terms=c("ADH", "Cancer"))
+```
+
+Diabetes:
+```{r, include=FALSE}
+mod=lmer(InvSimp_bact ~ADH*Diabetes+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: lmer(InvSimp_bact ~ADH (5000)*Diabetes+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digbact = 3)
+```
+
+Cardio:
+```{r, include=FALSE}
+mod=lmer(InvSimp_bact ~ADH*Cardio+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+
+mod2=lmer(InvSimp_bact ~ADH*Cardio*Season+(1|Donor), data=TOX_data_5000_donor)
+summary(mod2)
+aov2=anova(mod2)
+```
+
+LMER: lmer(InvSimp_bact ~ADH (5000) * Cardio+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digbact = 3)
+```
+
+Respiratory:
+```{r, include=FALSE}
+mod=lmer(InvSimp_bact ~ADH*Respiratory+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: lmer(InvSimp_bact ~ADH (5000) * Respiratory+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digbact = 3)
+```
+
+Neurological:
+```{r, include=FALSE}
+mod=lmer(InvSimp_bact ~ADH*Neuro+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: lmer(InvSimp_bact ~ADH * Neuro+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digbact = 3)
+```
+
+```{r, echo=FALSE}
+plot_model(mod, type="pred", terms=c("ADH", "Neuro"))
+```
+
+```{r, echo=FALSE}
+ggplot(TOX_data_5000_donor, aes(ADH, InvSimp_bact, group=Neuro, color=Neuro)) + geom_point(size=3) + geom_smooth(method = lm) + theme_bw()
+```
+
+### 16S x soil chemistry models
+
+pH:
+
+LMER: InvSimp_bact~ADH *  pH + (1|Donor)
+```{r, echo=FALSE}
+kable(ph_i_aov, digits = 3)
+```
+
+EC:
+
+LMER: InvSimp_bact~ADH *  EC + (1|Donor)
+```{r, echo=FALSE}
+kable(EC_i_aov, digits = 3)
+```
+
+Resp:
+
+LMER: InvSimp_bact~ADH * Evolved_CO2 + (1|Donor)
+```{r, echo=FALSE}
+kable(resp_i_aov, digits = 3)
+```
+
+BG:
+
+LMER: InvSimp_bact~ADH *  BG_avg + (1|Donor)
+```{r, echo=FALSE}
+kable(BG_i_aov, digits = 3)
+```
+
+NAG:
+
+LMER: InvSimp_bact~ADH * NAG_avg + (1|Donor)
+```{r, echo=FALSE}
+kable(NAG_i_aov, digits = 3)
+```
+
+PHOS:
+
+LMER: InvSimp_bact~ADH *  PHOS_avg + (1|Donor)
+```{r, echo=FALSE}
+kable(phos_i_aov, digits = 3)
+```
+
+LAP:
+
+LMER: InvSimp_bact~ADH * Season * LAP_avg + (1|Donor)
+```{r, echo=FALSE}
+kable(lap_i_aov, digits = 3)
+```
+
+Gravimetric moisture:
+
+LMER: InvSimp_bact~ADH *  moisture + (1|Donor)
+```{r, echo=FALSE}
+kable(gm_i_aov, digits = 3)
+```
+
+# ITS alpha diversity models:
+
+```{r, include=FALSE}
+ITS=TOX_data_5000_donor %>% select("Sample","Donor","ADH", "Percent_ADH", "BMI", "Season", "Chao1_ITS","InvSimp_ITS") %>% filter(Chao1_ITS != "NA")
+ITS_long=melt(ITS, id=c("Sample","Donor", "ADH", "Percent_ADH", "BMI", "Season"))
+
+ggplot(ITS_long, aes(x=ADH, y=value, group=Donor, color=Donor)) +  geom_point(size=3) + geom_line(size=3) + scale_color_manual(values=colpalette2) + facet_wrap(~variable, scales = "free_y")+theme_bw()
+```
+
+```{r, echo=FALSE}
+ggplot(ITS_long, aes(x=ADH, y=value, group=Donor, color=Donor)) +  geom_point(size=3) + geom_line(size=3) + scale_color_manual(values=colpalette2) + facet_wrap(~variable, scales = "free_y")+theme_bw()
+```
+
+```{r, echo=FALSE}
+ggplot(ITS_long, aes(x=ADH, y=value, group=Donor, color=Donor)) + geom_smooth(method=lm, se=FALSE, size=3) + scale_color_manual(values=colpalette2) + facet_wrap(~variable, scales = "free_y")+theme_bw()
+```
+
+First, check for normality 
+```{r, include=FALSE}
+normalTest(TOX_data_5000_donor$Chao1_ITS, method = "da")
+normalTest(TOX_data_5000_donor$InvSimp_ITS, method = "da")
+```
+
+Chao1 is not normal (omnibus p = 0.00571 ); Inverse Simpson is not normal (omnibus p = 1.066e-05 )
+
+```{r, echo=FALSE}
+hist(TOX_data_5000_donor$Chao1_ITS)
+hist(TOX_data_5000_donor$InvSimp_ITS)
+```
+
+## ITS Chao1:
+
+```{r,include=FALSE}
+Chao1_ITS_int=lmer(Chao1_ITS~ADH*BMI_code*Sex+Season +(1|Donor), data=TOX_data_5000_donor)
+Chao1_ITS_slope=lmer(Chao1_ITS~ADH*BMI_code*Sex+Season +(0+ADH|Donor), data=TOX_data_5000_donor)
+Chao1_ITS_ints=lmer(Chao1_ITS~ADH*BMI_code*Sex+Season +(1+ADH|Donor), data=TOX_data_5000_donor)
+
+anova(Chao1_ITS_int, Chao1_ITS_slope) #1028 vs 1029
+anova(Chao1_ITS_int, Chao1_ITS_ints) #1028 vs 1035
+#use random int
+
+summary(Chao1_ITS_int)
+Chao1_ITS_int_aov=anova(Chao1_ITS_int)
+```
+
+```{r, echo=FALSE}
+kable(Chao1_ITS_int_aov, digits = 3)
+```
+
+### ITS Chao1 x illnesses (Primary effects):
+
+Number of drugs:
+```{r, include=FALSE}
+mod=lmer(Chao1_ITS ~ADH*num_drugs+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: Chao1_ITS ~ADH * num_drugs + (1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Cancer:
+```{r, include=FALSE}
+mod=lmer(Chao1_ITS ~ADH*Cancer+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: Chao1_ITS ~ADH * Cancer+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+```{r, echo=FALSE}
+plot_model(mod, type="pred", terms=c("ADH", "Cancer"))
+```
+
+```{r, echo=FALSE}
+ggplot(TOX_data_5000_donor, aes(ADH, Chao1_ITS, group=Cancer, color=Cancer)) + geom_point(size=3) + geom_smooth(method = lm) + theme_bw()
+```
+
+
+Diabetes:
+```{r, include=FALSE}
+mod=lmer(Chao1_ITS ~ADH*Diabetes+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: lmer(Chao1_ITS ~ADH (5000)*Diabetes+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Cardio:
+```{r, include=FALSE}
+mod=lmer(Chao1_ITS ~ADH*Cardio+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+
+mod2=lmer(Chao1_ITS ~ADH*Cardio*Season+(1|Donor), data=TOX_data_5000_donor)
+summary(mod2)
+aov2=anova(mod2)
+```
+
+LMER: lmer(Chao1_ITS ~ADH (5000) * Cardio+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Respiratory:
+```{r, include=FALSE}
+mod=lmer(Chao1_ITS ~ADH*Respiratory+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: lmer(Chao1_ITS ~ADH (5000) * Respiratory+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Neurological:
+```{r, include=FALSE}
+mod=lmer(Chao1_ITS ~ADH*Neuro+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: lmer(Chao1_ITS ~ADH * Neuro+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+```{r, echo=FALSE}
+plot_model(mod, type="pred", terms=c("ADH", "Neuro"))
+```
+
+```{r, echo=FALSE}
+ggplot(TOX_data_5000_donor, aes(ADH, Chao1_ITS, group=Neuro, color=Neuro)) + geom_point(size=3) + geom_smooth(method = lm) + theme_bw()
+```
+
+### ITS x soil chem:
+
+
+```{r, include=FALSE}
+ggplot(TOX_data_5000_donor_seq, aes(x=pH, y=Chao1_ITS))+geom_point()+geom_smooth(method="loess")
+ph_r = lmer(Chao1_ITS~ADH*pH + (1|Donor), data = TOX_data_5000_donor_seq)
+ph_r_aov=anova(ph_r)
+plot_model(ph_r, type = "pred")
+
+ggplot(TOX_data_5000_donor_seq, aes(x=pH, y=InvSimp_ITS))+geom_point()+geom_smooth(method="loess")
+ggplot(TOX_data_5000_donor_seq, aes(x=ADH, y=InvSimp_ITS))+geom_point()+geom_smooth(method="loess")
+ph_i = lmer(InvSimp_ITS~ADH*pH_LRR + (1|Donor), data = TOX_data_5000_donor_seq)
+ph_i_aov=anova(ph_i)
+
+
+ggplot(TOX_data_5000_donor_seq, aes(x=EC, y=Chao1_ITS))+geom_point()+geom_smooth(method="loess")
+EC_r = lmer(Chao1_ITS~ADH*EC + (1|Donor), data = TOX_data_5000_donor_seq)
+EC_r_aov=anova(EC_r) 
+ggplot(TOX_data_5000_donor_seq, aes(x=EC, y=InvSimp_ITS))+geom_point()+geom_smooth(method="loess")
+EC_i = lmer(InvSimp_ITS~ADH*EC + (1|Donor), data = TOX_data_5000_donor_seq)
+EC_i_aov=anova(EC_i)
+
+
+ggplot(TOX_data_5000_donor_seq, aes(x=Evolved_CO2, y=Chao1_ITS))+geom_point()+geom_smooth(method="loess")
+resp_r = lmer(Chao1_ITS~ADH*Evolved_CO2 + (1|Donor), data = TOX_data_5000_donor_seq)
+resp_r_aov=anova(resp_r) 
+ggplot(TOX_data_5000_donor_seq, aes(x=Evolved_CO2, y=InvSimp_ITS))+geom_point()+geom_smooth(method="loess")
+resp_i = lmer(InvSimp_ITS~ADH*Evolved_CO2 + (1|Donor), data = TOX_data_5000_donor_seq)
+resp_i_aov=anova(resp_i)
+
+
+BG_r = lmer(Chao1_ITS~ADH*BG_avg + (1|Donor), data = TOX_data_5000_donor_seq)
+BG_r_aov=anova(BG_r)
+BG_i = lmer(InvSimp_ITS~ADH*BG_avg + (1|Donor), data = TOX_data_5000_donor_seq)
+BG_i_aov=anova(BG_i)
+summary(BG_i) #diversity increases with increasing BG activity
+ggplot(TOX_data_5000_donor_seq, aes(x=BG_avg, y=InvSimp_ITS))+geom_point()+geom_smooth(method="loess")
+
+NAG_r = lmer(Chao1_ITS~ADH*NAG_avg + (1|Donor), data = TOX_data_5000_donor_seq)
+NAG_r_aov=anova(NAG_r)
+NAG_i = lmer(InvSimp_ITS~ADH*NAG_avg + (1|Donor), data = TOX_data_5000_donor_seq)
+NAG_i_aov=anova(NAG_i)
+
+ggplot(TOX_data_5000_donor_seq, aes(x=PH_avg, y=Chao1_ITS))+geom_point()+geom_smooth(method="loess")
+PHOS_r = lmer(Chao1_ITS~ADH*PHOS_avg + (1|Donor), data = TOX_data_5000_donor_seq)
+phos_r_aov=anova(PHOS_r)
+PHOS_i = lmer(InvSimp_ITS~ADH*PHOS_avg + (1|Donor), data = TOX_data_5000_donor_seq)
+phos_i_aov=anova(PHOS_i)
+
+
+ggplot(TOX_data_5000_donor_seq, aes(x=LAP_avg, y=Chao1_ITS))+geom_point()+geom_smooth(method="loess")
+LAP_r = lmer(Chao1_ITS~ADH*LAP_avg + (1|Donor), data = TOX_data_5000_donor_seq)
+lap_r_aov=anova(LAP_r)
+summary(LAP_r) #richness increases with increasing LAP
+ggplot(TOX_data_5000_donor_seq, aes(x=LAP_avg, y=InvSimp_ITS))+geom_point()+geom_smooth(method="loess")
+LAP_i = lmer(InvSimp_ITS~ADH*LAP_avg + (1|Donor), data = TOX_data_5000_donor_seq)
+lap_r_aov=anova(LAP_i)
+summary(LAP_i) #diversity increases with increasing LAP acivity
+plot_model(LAP_i, type="pred")
+
+gm_r = lmer(Chao1_ITS~ADH*moisture + (1|Donor), data = TOX_data_5000_donor_seq)
+gm_r_aov=anova(gm_r)
+gm_i = lmer(InvSimp_ITS~ADH*moisture + (1|Donor), data = TOX_data_5000_donor_seq)
+gm_i_aov=anova(gm_i)
+summary(gm_i)
+#diversity increases with increasing moisture 
+ggplot(TOX_data_5000_donor_seq, aes(x=ADH, y=InvSimp_ITS, color=moisture))+geom_point(size=6)+geom_smooth(method="loess")+scale_color_viridis()
+ggplot(TOX_data_5000_donor_seq, aes(x=moisture, y=InvSimp_ITS, color=moisture))+geom_point(size=6)+geom_smooth(method="loess")+scale_color_viridis()
+
+
+fullchem_mod_r = lmer(Chao1_ITS~ADH*pH+ADH*EC+ADH*Evolved_CO2+ADH*BG_avg+ADH*NAG_avg+ADH*PHOS_avg+ADH*LAP_avg+ADH*moisture+(1|Donor), data = TOX_data_5000_donor_seq)
+summary(fullchem_mod_r)
+anova(fullchem_mod_r)
+plot_model(fullchem_mod_r, type="pred")
+#richness decreases with increasing pH
+fullchem_mod_i = lmer(InvSimp_ITS~ADH*pH+ADH*EC+ADH*Evolved_CO2+ADH*BG_avg+ADH*NAG_avg+ADH*PHOS_avg+ADH*LAP_avg+ADH*moisture+(1|Donor), data = TOX_data_5000_donor_seq)
+summary(fullchem_mod_i)
+anova(fullchem_mod_i)
+#diversity i
+
+```
+
+pH LRR:
+
+LMER: InvSimp_ITS~ADH * Season * pH_LRR + (1|Donor)
+```{r, echo=FALSE}
+kable(ph_r_aov, digits = 3)
+```
+
+EC LRR:
+
+LMER: InvSimp_ITS~ADH * Season * EC_LRR + (1|Donor)
+```{r, echo=FALSE}
+kable(EC_r_aov, digits = 3)
+```
+
+Resp LRR:
+
+LMER: InvSimp_ITS~ADH * Season * LRR_resp + (1|Donor)
+```{r, echo=FALSE}
+kable(resp_r_aov, digits = 3)
+```
+
+BG LRR:
+
+LMER: InvSimp_ITS~ADH * Season * BG_LRR + (1|Donor)
+```{r, echo=FALSE}
+kable(BG_r_aov, digits = 3)
+```
+
+NAG LRR:
+
+LMER: InvSimp_ITS~ADH * Season * NAG_LRR + (1|Donor)
+```{r, echo=FALSE}
+kable(NAG_r_aov, digits = 3)
+```
+
+PHOS LRR:
+
+LMER: InvSimp_ITS~ADH * Season * PHOS_LRR + (1|Donor)
+```{r, echo=FALSE}
+kable(phos_r_aov, digits = 3)
+```
+
+LAP LRR:
+
+LMER: InvSimp_ITS~ADH * Season * LAP_LRR + (1|Donor)
+```{r, echo=FALSE}
+kable(lap_r_aov, digits = 3)
+```
+
+Gravimetric moisture:
+
+LMER: InvSimp_ITS~ADH * Season * moisture + (1|Donor)
+```{r, echo=FALSE}
+kable(gm_r_aov, digits = 3)
+```
+
+## ITS InvSimp:
+
+```{r,include=FALSE}
+InvSimp_ITS_int=lmer(InvSimp_ITS~ADH*BMI_code*Sex+Season +(1|Donor), data=TOX_data_5000_donor)
+InvSimp_ITS_slope=lmer(InvSimp_ITS~ADH*BMI_code*Sex+Season +(0+ADH|Donor), data=TOX_data_5000_donor)
+InvSimp_ITS_ints=lmer(InvSimp_ITS~ADH*BMI_code*Sex+Season +(1+ADH|Donor), data=TOX_data_5000_donor)
+
+anova(InvSimp_ITS_int, InvSimp_ITS_slope) #644 vs 644
+anova(InvSimp_ITS_int, InvSimp_ITS_ints) #644 vs 644
+#use random int
+
+summary(InvSimp_ITS_int)
+InvSimp_ITS_int_aov=anova(InvSimp_ITS_int)
+```
+
+```{r, echo=FALSE}
+kable(InvSimp_ITS_int_aov, digits = 3)
+```
+
+```{r, echo=FALSE}
+plot_model(InvSimp_ITS_int, type = "pred", terms = c("ADH", "BMI_code"))
+```
+
+```{r, echo=FALSE}
+ggplot(TOX_data_5000_donor, aes(ADH, InvSimp_ITS, group=BMI_code, color=BMI_code))+geom_point(size=3)+geom_smooth(method=lm, size=2)+facet_grid(~Season)+theme_bw()
+
+ggplot(TOX_data_5000_donor, aes(ADH, InvSimp_ITS, group=BMI_code, color=BMI_code))+geom_point(size=3)+geom_smooth(method=lm, size=2)+theme_bw()
+```
+
+### ITS InvSimp x illnesses (Primary effects):
+
+Number of drugs:
+```{r, include=FALSE}
+mod=lmer(InvSimp_ITS ~ADH*num_drugs+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: InvSimp_ITS ~ADH * num_drugs + (1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Cancer:
+```{r, include=FALSE}
+mod=lmer(InvSimp_ITS ~ADH*Cancer+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: InvSimp_ITS ~ADH * Cancer+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Diabetes:
+```{r, include=FALSE}
+mod=lmer(InvSimp_ITS ~ADH*Diabetes+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: lmer(InvSimp_ITS ~ADH (5000)*Diabetes+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Cardio:
+```{r, include=FALSE}
+mod=lmer(InvSimp_ITS ~ADH*Cardio+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+
+mod2=lmer(InvSimp_ITS ~ADH*Cardio*Season+(1|Donor), data=TOX_data_5000_donor)
+summary(mod2)
+aov2=anova(mod2)
+```
+
+LMER: lmer(InvSimp_ITS ~ADH (5000) * Cardio+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Respiratory:
+```{r, include=FALSE}
+mod=lmer(InvSimp_ITS ~ADH*Respiratory+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: lmer(InvSimp_ITS ~ADH (5000) * Respiratory+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+Neurological:
+```{r, include=FALSE}
+mod=lmer(InvSimp_ITS ~ADH*Neuro+(1|Donor), data=TOX_data_5000_donor)
+summary(mod)
+aov=anova(mod)
+```
+
+LMER: lmer(InvSimp_ITS ~ADH * Neuro+(1|Donor)
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+### ITS Inverse Simpson x soil chemistry models
+
+pH LRR:
+
+LMER: InvSimp_ITS~ADH * Season * pH_LRR + (1|Donor)
+```{r, echo=FALSE}
+kable(ph_i_aov, digits = 3)
+```
+
+EC LRR:
+
+LMER: InvSimp_ITS~ADH * Season * EC_LRR + (1|Donor)
+```{r, echo=FALSE}
+kable(EC_i_aov, digits = 3)
+```
+
+Resp LRR:
+
+LMER: InvSimp_ITS~ADH * Season * LRR_resp + (1|Donor)
+```{r, echo=FALSE}
+kable(resp_i_aov, digits = 3)
+```
+
+BG LRR:
+
+LMER: InvSimp_ITS~ADH * Season * BG_LRR + (1|Donor)
+```{r, echo=FALSE}
+kable(BG_i_aov, digits = 3)
+```
+
+NAG LRR:
+
+LMER: InvSimp_ITS~ADH * Season * NAG_LRR + (1|Donor)
+```{r, echo=FALSE}
+kable(NAG_i_aov, digits = 3)
+```
+
+PHOS LRR:
+
+LMER: InvSimp_ITS~ADH * Season * PHOS_LRR + (1|Donor)
+```{r, echo=FALSE}
+kable(phos_i_aov, digits = 3)
+```
+
+LAP LRR:
+
+LMER: InvSimp_ITS~ADH * Season * LAP_LRR + (1|Donor)
+```{r, echo=FALSE}
+kable(lap_i_aov, digits = 3)
+```
+
+Gravimetric moisture:
+
+LMER: InvSimp_ITS~ADH * Season * moisture + (1|Donor)
+```{r, echo=FALSE}
+kable(gm_i_aov, digits = 3)
+```
+
+```{r, include=FALSE}
+TOX_data_5000_donor_seq_cor = TOX_data_5000_donor_seq %>% select(Chao1_bact, InvSimp_bact, Chao1_ITS, InvSimp_ITS, pH, EC, BG_avg, NAG_avg, PHOS_avg, LAP_avg)
+
+TOX_data_5000_donor_seq_cor = TOX_data_5000_donor_seq_cor[complete.cases(TOX_data_5000_donor_seq_cor),]
+cor_dat=as.matrix(TOX_data_5000_donor_seq_cor)
+
+#run the rcorr command on the data matrix
+library(Hmisc)
+library(corrplot)
+seq.chem_corr=rcorr(cor_dat, type="pearson")
+signif(seq.chem_corr$r,2)
+
+#adjust the pvalue for multiple comparisions
+pvaluesBH=as.matrix(p.adjust(seq.chem_corr$P, method = "BH"))
+
+seq.chem_corr$P[]=p.adjust(seq.chem_corr$P, method = "BH")
+class(seq.chem_corr$P)
+#seq.chem_corr$P[]=p.adjust(Tseq.chem_corr$P, method = "bonferroni")
+p_adj=as.data.frame(signif(seq.chem_corr$P,2))
+
+
+#plot the correleation, where NS p-values appeat as white squares
+corrplot(seq.chem_corr$r, method=c("color"), tl.cex=0.8, tl.col="black", addgrid.col=c("gray"), p.mat=seq.chem_corr$P, sig.level=0.05, insig="blank")
+
+```
+
+```{r, include=FALSE}
+TOX_data2=read_excel("C:/Users/Allison/OneDrive - University of Tennessee/DeBruyn Lab/NIJ_TOX/TOX_data_all_pub.xlsx", sheet = "Compiled")
+
+TOX_data_eea = TOX_data %>% filter(BG_avg != "NA") %>% select(Sample, Donor, Sex, Treatment, Season, ADH, Percent_ADH, BMI, BG_avg, NAG_avg, LAP_avg)
+
+#Sinsabaugh et al 2016 EEA C:N = BG/(NAG+PEP), where PEP can be LAP or AAP
+
+#calculate EEA C:N for TOX samples:
+TOX_eea_cn = TOX_data_eea %>% mutate(EEA_CN = BG_avg/(NAG_avg + LAP_avg))
+
+#plot EEA CUE:
+ggplot(TOX_eea_cn, aes(x=ADH, y=EEA_CN, group=Treatment, color = Treatment))+ geom_point(size=3) + geom_line(size=2) + geom_smooth(method = "lm") + facet_wrap(~Donor) + theme_bw()
+
+```
+
+
