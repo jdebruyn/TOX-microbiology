@@ -2587,45 +2587,8 @@ LMER: InvSimp_ITS~ADH * Season * moisture + (1|Donor)
 kable(gm_i_aov, digits = 3)
 ```
 
-```{r, include=FALSE}
-TOX_data_5000_donor_seq_cor = TOX_data_5000_donor_seq %>% select(Chao1_bact, InvSimp_bact, Chao1_ITS, InvSimp_ITS, pH, EC, BG_avg, NAG_avg, PHOS_avg, LAP_avg)
-
-TOX_data_5000_donor_seq_cor = TOX_data_5000_donor_seq_cor[complete.cases(TOX_data_5000_donor_seq_cor),]
-cor_dat=as.matrix(TOX_data_5000_donor_seq_cor)
-
-#run the rcorr command on the data matrix
-library(Hmisc)
-library(corrplot)
-seq.chem_corr=rcorr(cor_dat, type="pearson")
-signif(seq.chem_corr$r,2)
-
-#adjust the pvalue for multiple comparisions
-pvaluesBH=as.matrix(p.adjust(seq.chem_corr$P, method = "BH"))
-
-seq.chem_corr$P[]=p.adjust(seq.chem_corr$P, method = "BH")
-class(seq.chem_corr$P)
-#seq.chem_corr$P[]=p.adjust(Tseq.chem_corr$P, method = "bonferroni")
-p_adj=as.data.frame(signif(seq.chem_corr$P,2))
 
 
-#plot the correleation, where NS p-values appeat as white squares
-corrplot(seq.chem_corr$r, method=c("color"), tl.cex=0.8, tl.col="black", addgrid.col=c("gray"), p.mat=seq.chem_corr$P, sig.level=0.05, insig="blank")
 
-```
-
-```{r, include=FALSE}
-TOX_data2=read_excel("C:/Users/Allison/OneDrive - University of Tennessee/DeBruyn Lab/NIJ_TOX/TOX_data_all_pub.xlsx", sheet = "Compiled")
-
-TOX_data_eea = TOX_data %>% filter(BG_avg != "NA") %>% select(Sample, Donor, Sex, Treatment, Season, ADH, Percent_ADH, BMI, BG_avg, NAG_avg, LAP_avg)
-
-#Sinsabaugh et al 2016 EEA C:N = BG/(NAG+PEP), where PEP can be LAP or AAP
-
-#calculate EEA C:N for TOX samples:
-TOX_eea_cn = TOX_data_eea %>% mutate(EEA_CN = BG_avg/(NAG_avg + LAP_avg))
-
-#plot EEA CUE:
-ggplot(TOX_eea_cn, aes(x=ADH, y=EEA_CN, group=Treatment, color = Treatment))+ geom_point(size=3) + geom_line(size=2) + geom_smooth(method = "lm") + facet_wrap(~Donor) + theme_bw()
-
-```
 
 

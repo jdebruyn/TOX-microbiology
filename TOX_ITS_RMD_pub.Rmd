@@ -1,0 +1,2516 @@
+---
+title: "TOX2 ITS"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+set.seed(77)
+library(readxl)
+library(ggplot2)#graphing
+library(viridis)
+library(ggpubr)#graphing
+library(vegan)
+library(reshape2)
+library(phyloseq)
+library(lme4)
+library(lmerTest)
+library(fBasics)
+library(knitr)
+library(multcomp)
+library(multcompView)
+library(tidyverse)
+library(dplyr)
+
+phylum_colors <- c(
+  "#CBD588", "#5F7FC7", "orange","#DA5724", "#508578", "#CD9BCD",
+  "#AD6F3B", "#673770","#D14285", "#652926", "#C84248", 
+  "#8569D5", "#5E738F","#D1A33D", "#8A7C64", "#599861")
+colpalette2= c("khaki3","steelblue3","orange","chocolate","aquamarine4","plum3","black","mediumpurple4","violetred3","brown4","chartreuse3","lavenderblush4","lightpink","mediumpurple3","lightcyan1","palegreen4","red1","wheat4","papayawhip","tomato3")
+```
+
+```{r, include=FALSE}
+mothur_data_ITS= import_mothur(mothur_shared_file ="TOX2_ITS.shared", mothur_constaxonomy_file ="TOX2_ITS.taxonomy")
+
+#prepare metadata file for phyloseq - this is accomplished by preparing multiple files and megring them into one file
+treatments <- read_excel("treatments.xlsx")
+treatments$ADH=as.numeric(treatments$ADH)
+treatments$Type=as.factor(treatments$Type)
+treatments$Trt=as.factor(treatments$Trt)
+treatments$Sample_Type=as.factor(treatments$Sample_Type)
+treatments$Timepoint=as.factor(treatments$Timepoint)
+treatments$Season=as.factor(treatments$Season)
+treatments$Sector=as.factor(treatments$Sector)
+treatments$Sex=as.factor(treatments$Sex)
+treatments$BMI_level = factor(treatments$BMI_level, ordered = TRUE, levels = c("Underweight","Normal","Overweight","Obese"))
+
+TOXdata = read_excel("TOX_data_all_pub.xlsx", sheet = "Data")
+TOXdata$Age_cat = factor(TOXdata$Age_cat, ordered = TRUE, levels = c("60","61-70","71-80","80"))
+TOXdata$Diabetes=as.factor(TOXdata$Diabetes)
+TOXdata$Cancer=as.factor(TOXdata$Cancer)
+TOXdata$Cardio=as.factor(TOXdata$Cardio)
+TOXdata$Respiratory=as.factor(TOXdata$Respiratory)
+TOXdata$Neuro=as.factor(TOXdata$Neuro)
+TOXdata$Pneumonia=as.factor(TOXdata$Pneumonia)
+TOXdata = TOXdata %>% select("Sample","ADH_10_actual", "Age_cat", "Diabetes", "Cancer","Cardio","Respiratory","Neuro","Pneumonia","Gravimetric Moisture", "Temperature", "pH","pH_LRR","EC","EC_LRR","BG_avg","BG_LRR","NAG_avg","NAG_LRR","PHOS_avg","PHOS_LRR","LAP_avg", "LAP_LRR","Evolved_CO2","LRR_resp")
+
+serum_drugs=read_excel("TOX screen_allmatrices.xlsx", sheet = "serum_merge")
+serum_drugs = serum_drugs %>%
+  select(-id, -rep1, -rep)
+check=as.data.frame(ifelse(serum_drugs[5:82] == 0, 0, 1))
+check$Donor = serum_drugs$donor
+check= check %>%
+  mutate(num_drugs = select(., Albuterol:Hydralazine) %>% rowSums(na.rm= TRUE)) %>%
+  select(Donor, num_drugs)
+
+num_serum_drugs = check
+metadata = treatments %>%
+  left_join(num_serum_drugs, by="Donor") %>%
+  left_join(TOXdata, by = "Sample")
+
+TOXill = read_excel("TOX_data_all_pub.xlsx", sheet = "Data")
+ill = TOXill %>% filter(Percent_ADH == "1") %>% filter(Treatment == "donor") %>% select(Donor, Cancer, Cardio, Respiratory, Diabetes, Neuro, Pneumonia)
+ill$Trt = "fluid"
+
+#levels for sample order - this will be important for plotting relative abudnace in sample order (i'm sure there are other easier ways to do this)
+levels=c("TOX001CON", "TOX001", "TOX001_1500", "TOX001_3000", "TOX001_4500", "TOX001_8000", "TOX001_11500", "TOX001_15500","TOX001DF", "TOX002CON", "TOX002", "TOX002_1500A", "TOX002_1500B", "TOX002_2750", "TOX002_3750","TOX002DF", "TOX003CON", "TOX003", "TOX003_1500", "TOX003_3000", "TOX003_4500","TOX003DF", "TOX004CON", "TOX004", "TOX004_1500", "TOX004_3000", "TOX004_3500","TOX004DF", "TOX005CON", "TOX005", "TOX005_1500", "TOX005_3000", "TOX005_4500", "TOX005_6500", "TOX005_8500","TOX005DF", "TOX006CON", "TOX006", "TOX006_1500", "TOX006_3000", "TOX006_4500","TOX006DF", "TOX007CON", "TOX007", "TOX007_1500", "TOX007_3000", "TOX007_4500", "TOX007_6000","TOX007DF", "TOX008CON", "TOX008", "TOX008_1500", "TOX008_3000", "TOX008_4500", "TOX008_6500","TOX008DF", "TOX009CON", "TOX009", "TOX009_1500", "TOX009_3000", "TOX009_4500","TOX009DF", "TOX010CON", "TOX010", "TOX010_1500", "TOX010_2500", "TOX010_4500", "TOX010_9000", "TOX010_13000", "TOX010_17500", "TOX010DF", "TOX011CON", "TOX011", "TOX011_1500", "TOX011_3000", "TOX011_3500", "TOX011_5500", "TOX011_7000", "TOX012CON", "TOX012", "TOX012_1500", "TOX012_3000", "TOX012_4000", "TOX012_6000","TOX012DF", "TOX013CON", "TOX013", "TOX013_1500", "TOX013_3000", "TOX013_4000", "TOX013_7500", "TOX013DF","TOX015CON","TOX015","TOX015_250","TOX015_500","TOX015_1000","TOX015_1500", "TOX016CON","TOX016","TOX016_500","TOX016_1000","TOX016_1500","TOX016DF","TOX017CON","TOX017","TOX017_1500","TOX017_3000","TOX017_4500","TOX017_8500","TOX017_13000","TOX017_18500","TOX017DF","TOX018CON","TOX018","TOX018_1500","TOX018_2000","TOX018_3000","TOX018_4000", "TOX019CON","TOX019","TOX019_1500","TOX019_3000","TOX019_3500","TOX019_4500","TOX019_5500","TOX019DF","TOX020CON","TOX020","TOX020_1500","TOX020_3500","TOX020_4500","TOX020_6000","TOX020DF")
+```
+
+```{r, include=FALSE}
+map=metadata
+head(map)
+map=sample_data(map) #convert metadata into phyloseq format
+rownames(map)=map$group #assign rownames to be group
+map$group=ordered(map$group, levels=levels)
+moth_merge = merge_phyloseq(mothur_data_ITS, map) #merge mothurdata with the metadata
+colnames(tax_table(moth_merge)) #print column names of tax file
+colnames(tax_table(moth_merge)) = c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus","Species") #rename tax column names
+sample_sums=as.data.frame(sample_sums(moth_merge)) #calculate the number of reads per sample
+a=colSums(sample_sums)
+```
+
+Prior to removing check samples and singletons, we have a total of `r a` reads across `r nrow(sample_sums)` samples.
+
+```{r, include=FALSE}
+#calculate goods coverage
+samp = subset_samples(moth_merge, Type == "sample") #remove check samples 
+samp = prune_taxa(taxa_sums(samp) > 0, samp)
+
+#goods = 1 - (F1/N); F1 = # of singletons and N = total number of reads
+cov_df=as.data.frame(sample_sums(samp))
+cov_df$group = row.names(cov_df)
+sing =  prune_taxa(taxa_sums(samp) == 1, samp)
+sing_df = as.data.frame(sample_sums(sing))
+sing_df$group=row.names(sing_df)
+
+cov_df = cov_df %>% left_join(sing_df, by = "group")
+colnames(cov_df) = c("N", "group", "S")
+
+cov_df = cov_df %>% mutate(goods = (1 - (S/N)))
+min(cov_df$goods) #0.9914076
+
+library(writexl)
+write_xlsx(cov_df, "TOX2_ITS_coverage.xlsx")
+```
+
+```{r, include=FALSE}
+#look at the check samples included in the sequencing run
+TOX_check=subset_samples(moth_merge, Type == "check") #select only check samples
+TOX_check_abund = TOX_check %>% transform_sample_counts(function(x) {x/sum(x)} ) #calculate relaticve abundance of OTUs in check samples
+
+TOX_check_phylum = TOX_check %>%
+  tax_glom(taxrank="Phylum") %>%
+  transform_sample_counts(function(x) {x/sum(x)} ) %>%
+  psmelt() %>%
+  arrange(Phylum) #look at the reltaive abudance of fungal phyla in check samples
+
+phylum_colors <- c(
+  "#CBD588", "#5F7FC7", "orange","#DA5724", "#508578", "#CD9BCD",
+  "#AD6F3B", "#673770","#D14285", "#652926", "#C84248", 
+  "#8569D5", "#5E738F","#D1A33D", "firebrick2", "#599861")
+nb.cols=20
+phylum_colors_expanded=colorRampPalette(phylum_colors)(nb.cols)
+
+ggplot(TOX_check_phylum, aes(x=Sample, y=Abundance, fill = Phylum)) + geom_bar(stat = "identity") + scale_fill_manual(values = phylum_colors_expanded) + theme(axis.text.x = element_text(angle = 60, hjust = 1, size = 8))+ theme(legend.position="bottom") +guides(fill=guide_legend(ncol=4))
+```
+
+
+```{r, include=FALSE}
+moth_sub=subset_samples(moth_merge, Type == "sample") #remove check samples 
+moth_sub=prune_taxa(taxa_sums(moth_sub) > 0, moth_sub) #remove OTUs with 0 reads, which are those likely specific to the check samples
+moth_sub = prune_taxa(taxa_sums(moth_sub) > 1, moth_sub) #remove singletons
+sample_sums_pruned=as.data.frame(sample_sums(moth_sub))
+
+total_reads=colSums(sample_sums_pruned) #9037408 
+avg_reads=round(mean(sample_sums(moth_sub))) #67443
+
+TOX=moth_sub
+TOX_soil=subset_samples(TOX, Sample_Type == "soil")
+TOX_fluid=subset_samples(TOX, Sample_Type == "fluid")
+```
+
+After the removal of check samples and singletons, we have a total of `r total_reads` across `r nrow(sample_sums_pruned)` with a mean of `r avg_reads` reads per sample.
+
+```{r, include=FALSE}
+#look at library size distribution
+sample_sum_TOX = data.frame(sum=sample_sums(TOX))
+b=ggplot(sample_sum_TOX, aes(x=sum)) +
+  geom_histogram(color="black", fill="indianred", binwidth = 2500) +
+  ggtitle("Distribution of sample sequencing depth") +
+  xlab("Read counts") +
+  theme(axis.title.y = element_blank())
+
+min=round(min(sample_sum_TOX$sum)) #The smallest library contains 13193 sequences
+max=round(max(sample_sum_TOX$sum)) #The largest library contains 251613 sequences
+avg=round(mean(sample_sum_TOX$sum)) #The average library size is 67443 sequences
+med=round(median(sample_sum_TOX$sum))
+```
+
+Sequencing distribution:
+
+```{r, echo=FALSE}
+b
+```
+
+The smallest library contains only `r min` reads, while the largest library contains `r max` reads. The median library size is `r med`.
+
+## Decomposition Fluid
+
+```{r, include=FALSE}
+TOX_abund = TOX %>% transform_sample_counts(function(x) {x/sum(x)} )
+
+#phylum
+#calculate relative abundance at the phylum level for decomposition fluid samples only
+TOX_phylum = TOX %>%
+  tax_glom(taxrank="Phylum") %>%
+  transform_sample_counts(function(x) {x/sum(x)} ) %>%
+  psmelt() %>%
+  filter(Abundance > 0.02) %>%
+  arrange(Phylum)
+
+TOX_phylum_fluid = TOX_phylum %>%
+  filter(Sample_Type == "fluid")
+TOX_phylum_fluid$Tax_rank = "Phylum"
+TOX_phylum_fluid$Tax_ID = TOX_phylum_fluid$Phylum
+phylum_fluid = TOX_phylum_fluid %>%
+  select(OTU, Sample, Abundance, group, Donor, Tax_rank, Tax_ID)
+
+#class
+#calculate relative abundance at the class level for decomposition fluid samples only
+TOX_Class = TOX %>%
+  tax_glom(taxrank="Class") %>%
+  transform_sample_counts(function(x) {x/sum(x)} ) %>%
+  psmelt() %>%
+  filter(Abundance > 0.05) %>%
+  arrange(Class)
+
+TOX_Class_fluid = TOX_Class %>%
+  filter(Sample_Type == "fluid")
+TOX_Class_fluid$Tax_rank = "Class"
+TOX_Class_fluid$Tax_ID = TOX_Class_fluid$Class
+Class_fluid = TOX_Class_fluid %>%
+  select(OTU, Sample, Abundance, group, Donor, Tax_rank, Tax_ID)
+
+#Order
+#calculate relative abundance at the order level for decomposition fluid samples only
+TOX_Order = TOX %>%
+  tax_glom(taxrank="Order") %>%
+  transform_sample_counts(function(x) {x/sum(x)} ) %>%
+  psmelt() %>%
+  filter(Abundance > 0.05) %>%
+  arrange(Order)
+
+#genus
+#calculate relative abundance at the genus level for decomposition fluid samples only
+TOX_genus = TOX %>%
+  tax_glom(taxrank="Genus") %>%
+  transform_sample_counts(function(x) {x/sum(x)} ) %>%
+  psmelt() %>%
+  filter(Abundance > 0.05) %>%
+  arrange(Genus)
+
+TOX_genus_fluid = TOX_genus %>%
+  filter(Sample_Type == "fluid")
+TOX_genus_fluid$Tax_rank = "Genus"
+TOX_genus_fluid$Tax_ID = TOX_genus_fluid$Genus
+Genus_fluid = TOX_genus_fluid %>%
+  select(OTU, Sample, Abundance, group, Donor, Tax_rank, Tax_ID)
+
+##
+#make a plot of phylum, class, and genus reltaive abudance in fluid samples (each taxonomic level will have one panel)
+##
+
+#merge the dataframes for plotting
+fluid_relabund_graphing = rbind(phylum_fluid, Class_fluid, Genus_fluid)
+fluid_relabund_graphing$Tax_rank = factor(fluid_relabund_graphing$Tax_rank, levels = c("Phylum", "Class", "Genus"))
+fluid_relabund_graphing$library = "ITS"
+
+phylum_colors <- c(
+  "#CBD588", "#5F7FC7", "orange","#DA5724", "#508578", "#CD9BCD",
+  "#AD6F3B", "#673770","#D14285", "#652926", "#C84248", 
+  "#8569D5", "#5E738F","#D1A33D", "firebrick2", "#599861")
+nb.cols=20
+phylum_colors_expanded=colorRampPalette(phylum_colors)(nb.cols)#make sure there are enough colors for the number of taxa present in the merged dataframe
+
+#plot
+ggplot(fluid_relabund_graphing, aes(x=group, y=Abundance, fill = Tax_ID)) + geom_bar(stat = "identity") + scale_fill_manual(values = phylum_colors_expanded) + theme(axis.text.x = element_text(angle = 60, hjust = 1, size = 8)) + facet_wrap(~Tax_rank, scales = "free_x", nrow = 1)+ theme(legend.position="bottom") +guides(fill=guide_legend(ncol=4))
+```
+
+```{r, inlcude=FALSE}
+#Q: what is the average number of unique phyla, class, and genera are present in decomposition fluid samples between donors
+
+avg_phyla=phylum_fluid %>%
+  group_by(Donor) %>%
+  summarise(num_phyla = length(unique(Tax_ID)))
+ITS_df_avg_phyla= round(mean(avg_phyla$num_phyla),0)
+ITS_df_phyla_min= min(avg_phyla$num_phyla)
+ITS_df_phyla_max = max(avg_phyla$num_phyla)
+
+ascomycota=phylum_fluid %>%
+  filter(Tax_ID ==  "p__Ascomycota")
+ascomycota_df_avg = mean(ascomycota$Abundance)
+ascomycota_df_min = min(ascomycota$Abundance)
+ascomycota_df_max = max(ascomycota$Abundance)
+
+fluid_phyla_abund_avgs = phylum_fluid %>%
+  group_by(Tax_ID) %>%
+  summarise(avg_phyla_abund = mean(Abundance)*100)
+
+fluid_class_abund_avgs = Class_fluid %>%
+  group_by(Tax_ID) %>%
+  summarise(avg_class_abund = mean(Abundance)*100) %>%
+  arrange(desc(avg_class_abund))
+
+fluid_genus_abund_avgs = Genus_fluid %>%
+  group_by(Tax_ID) %>%
+  summarise(avg_genus_abund = mean(Abundance)*100) %>%
+  arrange(desc(avg_genus_abund))
+```
+
+There are an average of `r ITS_df_avg_phyla` ITS phyla present in decomposition fluid samples, with a range of `r ITS_df_phyla_min` - `r ITS_df_phyla_max` phyla. Ascomycota dominated the decomposition fluid fungal communitites, with an average relative abundance of `r round(ascomycota_df_avg*100,0)`. Ascomycota relative abundance ranged from `r round(ascomycota_df_min*100, 0)` to `r round(ascomycota_df_max*100, 0)`. 
+
+Fluid phylum abundances: 
+```{r, echo=FALSE}
+kable(fluid_phyla_abund_avgs, digits = 2)
+```
+
+Fluid class abundances:
+```{r, echo=FALSE}
+kable(fluid_class_abund_avgs, digits = 2)
+```
+
+Fluid genus abundances:
+```{r, echo=FALSE}
+kable(fluid_genus_abund_avgs, digits = 2)
+```
+
+## Decomposition soil
+
+```{r, include=FALSE}
+#relative abundance in soil samples only
+
+#phylum
+TOX_phylum = TOX %>%
+  tax_glom(taxrank="Phylum") %>%
+  transform_sample_counts(function(x) {x/sum(x)} ) %>%
+  psmelt() %>%
+  arrange(Phylum) #calculate relative abundance of each phylum
+
+TOX_phylum_soil = TOX_phylum %>%
+  filter(Sample_Type == "soil") #remove fluid samples so only soil remains
+TOX_phylum_soil$Tax_rank = "Phylum" #add a column called 'Tax_rank' and make every value 'phylum'
+TOX_phylum_soil$Tax_ID = TOX_phylum_soil$Phylum #add a column called 'Tax_ID' and fill the values from column 'phylum'
+phylum_soil = TOX_phylum_soil %>%
+  select(OTU, Sample, Abundance, group, Donor, Trt, Timepoint, ADH, Tax_rank, Tax_ID) #select certain columns to simplify the dataframe
+
+phylum_soil_sum = phylum_soil %>%
+  filter(Timepoint != "NA") %>%
+  group_by(Donor, Timepoint, Tax_ID) %>%
+  summarise(sum_phylum = sum(Abundance)*100) #remove samples with timepoint 'NA' (aka TOX002-1500A/B), group dataframe and take the sum across phyla to give the abundance of each bacterial phylum for each donor at each timepoint sampled
+
+phylum_soil_sum_zero = phylum_soil_sum %>%
+ spread(key = Tax_ID, value = sum_phylum) #spread the dataframe so all unique phyla have a column and each row represents one sample and the values for phyla are their abundance. This has to happen so phylumes that disappear or are only in certain donors are represented
+
+phylum_soil_sum_zero[is.na(phylum_soil_sum_zero)] <- 0 #fill all NAs with '0'
+
+#phylum_soil_sum_zero$k__Fungi_unclassified
+#phylum_soil_sum_zero$p__Zoopagomycota
+
+phylum_soil_sum_zero_long = phylum_soil_sum_zero %>%
+  gather(key = "Tax_ID", value = "sum_phylum", "k__Fungi_unclassified":"p__Zoopagomycota") %>%
+  arrange(Donor,Timepoint) #change the dataset back to long format so we can calculate the difference
+
+ggplot(phylum_soil_sum, aes(x=Timepoint, y=sum_phylum, color=Donor))+geom_point(size=3)+geom_line(size=1.5)+facet_wrap(~Tax_ID)+scale_color_manual(values=colpalette2)
+
+ggplot(phylum_soil_sum, aes(x=as.numeric(Timepoint), y=sum_phylum, color=Donor))+ geom_smooth(method = lm, se=FALSE, fullrange=FALSE, size=1.5) + facet_wrap(~Tax_ID)+scale_color_manual(values=colpalette2)
+
+phylum_soil_sum_control = phylum_soil_sum_zero_long %>%
+  filter(Timepoint == "A") #remove control sample values so we can create a new column
+
+phylum_soil_sum2 = phylum_soil_sum_zero_long %>%
+  filter(Timepoint != "A") %>%
+  left_join(phylum_soil_sum_control, by=c("Donor","Tax_ID")) #remove control (timepoint A) values and then rejoin by donor and Tax_ID to pair donor control abundances with their decomposition samples
+
+colnames(phylum_soil_sum2) = c("Donor","Decomp_Timepoint","Tax_ID","Abundance","Control_PA","Control_abund")
+
+phylum_soil_sum3 = phylum_soil_sum2 %>%
+  mutate(difference = Control_abund-Abundance) #calculate the difference between control and decomp soil abundances in a new column named 'difference'
+
+phylum_soil_sum4 = phylum_soil_sum3 %>%
+  group_by(Donor, Tax_ID) %>%
+  summarise(max_abs_diff = difference[which.max( abs(difference) )]) #extract the maximum absolute difference for each donor/Tax_ID
+#negative sign = increasing over time; positive sign = decreasing over time
+
+phylum_soil_sum5 = phylum_soil_sum4 %>%
+  group_by(Tax_ID) %>%
+  summarise(med_max_absdiff=median(max_abs_diff)) #take the median maximum absolute difference across all individuals
+
+phylum_soil_sum4_wide = phylum_soil_sum4 %>%
+  spread(key = Tax_ID, value = max_abs_diff) #make a table where the rows are one donor and the columns are each phylum with their maximum absolute difference across timepoints for that donor
+
+#how many donors increase, decrease, no change
+phylum_sign_delta = phylum_soil_sum4  %>%
+  group_by(Tax_ID) %>%
+  count(sign(max_abs_diff))%>%
+  spread(key = 'sign(max_abs_diff)', value = n)
+```
+
+Soil phylum differences in abundace (max value control - decomp abundance): 
+```{r, echo=FALSE, warning=FALSE}
+kable(phylum_soil_sum4_wide, digits = 2)
+```
+
+Donor comparison (phylum level): Increase vs. Decrease during decomp
+```{r, echo=FALSE}
+kable(phylum_sign_delta, digits = 2)
+```
+
+Soil phylum: meadian max absolute difference
+```{r, echo=FALSE}
+kable(phylum_soil_sum5, digits = 2)
+```
+
+```{r, include=FALSE}
+#class
+TOX_Class = TOX %>%
+  tax_glom(taxrank="Class") %>%
+  transform_sample_counts(function(x) {x/sum(x)} ) %>%
+  psmelt() %>%
+  arrange(Class) #calculate relative abundance of each class 
+
+TOX_Class_soil = TOX_Class %>%
+  filter(Sample_Type == "soil") #remove fluid samples so only soil remains
+TOX_Class_soil$Tax_rank = "Class" #add a column called 'Tax_rank' and make every value 'Class'
+TOX_Class_soil$Tax_ID = TOX_Class_soil$Class #add a column called 'Tax_ID' and fill the values from column 'Class'
+Class_soil = TOX_Class_soil %>%
+  select(OTU, Sample, Abundance, group, Donor, Trt, Timepoint, ADH, Tax_rank, Tax_ID) #select certain columns to simplify the dataframe
+
+Class_soil_sum = Class_soil %>%
+  filter(Timepoint != "NA") %>%
+  group_by(Donor, Timepoint, Tax_ID) %>%
+  summarise(sum_class = sum(Abundance)*100) #remove samples with timepoint 'NA' (aka TOX002-1500A/B), group dataframe and take the sum across classes to give the abundance of each bacterial class for each donor at each timepoint sampled
+
+class_soil_sum_zero = Class_soil_sum %>%
+ spread(key = Tax_ID, value = sum_class) #spread the dataframe so all unique classes have a column and each row represents one sample and the values for classes are their abundace. This has to happen so classes that dissappear or are only in certain donors are represented
+
+class_soil_sum_zero[is.na(class_soil_sum_zero)] <- 0 #fill all NAs with '0'
+
+#class_soil_sum_zero$c__Agaricomycetes
+#class_soil_sum_zero$p__Zoopagomycota_unclassified
+
+class_soil_sum_zero_long = class_soil_sum_zero %>%
+  gather(key = "Tax_ID", value = "sum_class", "c__Agaricomycetes":"p__Zoopagomycota_unclassified") %>%
+  arrange(Donor,Timepoint) #change the dataset back to long format so we can calculate the difference
+
+ggplot(Class_soil_sum, aes(x=Timepoint, y=sum_class, color=Donor))+geom_point(size=3)+geom_line(size=1.5)+facet_wrap(~Tax_ID)+scale_color_manual(values=colpalette2)
+
+ggplot(Class_soil_sum, aes(x=as.numeric(Timepoint), y=sum_class, color=Donor))+ geom_smooth(method = lm, se=FALSE, fullrange=FALSE, size=1.5) + facet_wrap(~Tax_ID)+scale_color_manual(values=colpalette2)
+
+class_soil_sum_control = class_soil_sum_zero_long %>%
+  filter(Timepoint == "A") #remove control sample values so we can create a new column
+
+class_soil_sum2 = class_soil_sum_zero_long %>%
+  filter(Timepoint != "A") %>%
+  left_join(class_soil_sum_control, by=c("Donor","Tax_ID")) #remove control (timepoint A) values and then rejoin by donor and Tax_ID to pair donor control abundances with their decomposition samples
+
+colnames(class_soil_sum2) = c("Donor","Decomp_Timepoint","Tax_ID","Abundance","Control_PA","Control_abund")
+
+class_soil_sum3 = class_soil_sum2 %>%
+  mutate(difference = Control_abund-Abundance) #calculate the difference between control and decomp soil abundances in a new column named 'difference'
+
+class_soil_sum4 = class_soil_sum3 %>%
+  group_by(Donor, Tax_ID) %>%
+  summarise(max_abs_diff = difference[which.max( abs(difference) )]) #extract the maximum absolute difference for each donor/Tax_ID
+#negative sign = increasing over time; positive sign = decreasing over time
+
+class_soil_sum5 = class_soil_sum4 %>%
+  group_by(Tax_ID) %>%
+  summarise(med_max_absdiff=median(max_abs_diff)) %>%
+  arrange(desc(med_max_absdiff))#take the median maximum absolute difference across all individuals
+
+class_soil_sum4_wide = class_soil_sum4 %>%
+  spread(key = Tax_ID, value = max_abs_diff) #make a table where the rows are one donor and the columns are each class with their maximum absolute difference across timepoints for that donor
+
+#how many donors increase, decrease, no change
+class_sign_delta = class_soil_sum4  %>%
+  group_by(Tax_ID) %>%
+  count(sign(max_abs_diff))%>%
+  spread(key = 'sign(max_abs_diff)', value = n)
+```
+
+Soil class differences in abundace (max value control - decomp abundance): 
+```{r, echo=FALSE, warning=FALSE}
+kable(class_soil_sum4_wide, digits = 2)
+```
+
+Donor comparison (Class level): Increase vs. Decrease during decomp
+```{r, echo=FALSE}
+kable(class_sign_delta, digits = 2)
+```
+
+Soil Class: meadian max absolute difference
+```{r, echo=FALSE}
+kable(class_soil_sum5, digits = 2)
+```
+
+```{r, include=FALSE}
+#genus
+TOX_genus = TOX %>%
+  tax_glom(taxrank="Genus") %>%
+  transform_sample_counts(function(x) {x/sum(x)} ) %>%
+  psmelt() %>%
+  arrange(Genus)
+ # filter(Abundance > 0.05) %>%
+   #calculate relative abundance of each genus; can change this to remove genera less than 5% by adding in the filter(Abundance > 0.05) line
+
+TOX_genus_soil = TOX_genus %>%
+  filter(Sample_Type == "soil") #remove fluid samples so only soil remains
+TOX_genus_soil$Tax_rank = "Genus" #add a column called 'Tax_rank' and make every value 'genus'
+TOX_genus_soil$Tax_ID = TOX_genus_soil$Genus #add a column called 'Tax_ID' and fill the values from column 'genus'
+genus_soil = TOX_genus_soil %>%
+  select(OTU, Sample, Abundance, group, Donor, Trt, Timepoint, ADH, Tax_rank, Tax_ID) #select certain columns to simplify the dataframe
+
+genus_soil_sum = genus_soil %>%
+  filter(Timepoint != "NA") %>%
+  group_by(Donor, Timepoint, Tax_ID) %>%
+  summarise(sum_genus = sum(Abundance)*100) #remove samples with timepoint 'NA' (aka TOX002-1500A/B), group dataframe and take the sum across genuses to give the abundance of each bacterial genus for each donor at each timepoint sampled
+
+genus_soil_sum_zero = genus_soil_sum %>%
+ spread(key = Tax_ID, value = sum_genus) #spread the dataframe so all unique genuses have a column and each row represents one sample and the values for genuses are their abundace. This has to happen so genuses that dissappear or are only in certain donors are represented
+
+genus_soil_sum_zero[is.na(genus_soil_sum_zero)] <- 0 #fill all NAs with '0'
+
+#genus_soil_sum_zero$c__Agaricomycetes_unclassified
+#genus_soil_sum_zero$p__Zoopagomycota_unclassified
+
+genus_soil_sum_zero_long = genus_soil_sum_zero %>%
+  gather(key = "Tax_ID", value = "sum_genus", "c__Agaricomycetes_unclassified":"p__Zoopagomycota_unclassified") %>%
+  arrange(Donor,Timepoint) #change the dataset back to long format so we can calculate the difference
+
+#look at genus x donor over time:
+genus_donorxtime = genus_soil_sum_zero_long %>%
+  spread(key=Timepoint, value = sum_genus)
+
+ggplot(genus_soil_sum, aes(x=Timepoint, y=sum_genus, color=Donor))+geom_point(size=3)+geom_line(size=1.5)+facet_wrap(~Tax_ID)+scale_color_manual(values=colpalette2)
+
+ggplot(genus_soil_sum, aes(x=as.numeric(Timepoint), y=sum_genus, color=Donor))+ geom_smooth(method = lm, se=FALSE, fullrange=FALSE, size=1.5) + facet_wrap(~Tax_ID)+scale_color_manual(values=colpalette2)
+
+genus_soil_sum_control = genus_soil_sum_zero_long %>%
+  filter(Timepoint == "A") #remove control sample values so we can create a new column
+
+genus_soil_sum2 = genus_soil_sum_zero_long %>%
+  filter(Timepoint != "A") %>%
+  left_join(genus_soil_sum_control, by=c("Donor","Tax_ID")) #remove control (timepoint A) values and then rejoin by donor and Tax_ID to pair donor control abundances with their decomposition samples
+
+colnames(genus_soil_sum2) = c("Donor","Decomp_Timepoint","Tax_ID","Abundance","Control_PA","Control_abund")
+
+genus_soil_sum3 = genus_soil_sum2 %>%
+  mutate(difference = Control_abund-Abundance) #calculate the difference between control and decomp soil abundances in a new column named 'difference'
+
+genus_soil_sum4 = genus_soil_sum3 %>%
+  group_by(Donor, Tax_ID) %>%
+  summarise(max_abs_diff = difference[which.max( abs(difference) )]) #extract the maximum absolute difference for each donor/Tax_ID
+#negative sign = increasing over time; positive sign = decreasing over time
+
+genus_soil_sum5 = genus_soil_sum4 %>%
+  group_by(Tax_ID) %>%
+  summarise(med_max_absdiff=median(max_abs_diff)) %>%
+  arrange(desc(med_max_absdiff))#take the median maximum absolute difference across all individuals
+
+genus_soil_sum4_wide = genus_soil_sum4 %>%
+  spread(key = Tax_ID, value = max_abs_diff) #make a table where the rows are one donor and the columns are each genus with their maximum absolute difference across timepoints for that donor
+
+#how many donors increase, decrease, no change
+genus_sign_delta = genus_soil_sum4  %>%
+  group_by(Tax_ID) %>%
+  count(sign(max_abs_diff))%>%
+  spread(key = 'sign(max_abs_diff)', value = n)
+```
+
+Soil genus differences in abundace (max value control - decomp abundance): 
+```{r, echo=FALSE, warning=FALSE}
+kable(genus_soil_sum4_wide, digits = 2)
+```
+
+Donor comparison (genus level): Increase vs. Decrease during decomp
+```{r, echo=FALSE}
+kable(genus_sign_delta, digits = 2)
+```
+
+Soil genus: meadian max absolute difference
+```{r, echo=FALSE}
+kable(genus_soil_sum5, digits = 2)
+```
+
+## Alpha diversity
+
+```{r, include=FALSE}
+alphadiv_ITS = read_excel("TOX2_ITS_alphadiv.xlsx")# this will load the file that is generated by the code below, which calculated Chao1, Inverse Simpson, and Richness:
+
+#calculations
+min_lib <- min(sample_sums(TOX))
+nsamp = nsamples(TOX)
+trials = 100
+
+richness <- matrix(nrow = nsamp, ncol = trials)
+row.names(richness) <- sample_names(TOX)
+
+chao1 <- matrix(nrow = nsamp, ncol = trials)
+row.names(chao1) <- sample_names(TOX)
+
+evenness <- matrix(nrow = nsamp, ncol = trials)
+row.names(evenness) <- sample_names(TOX)
+
+set.seed(3)
+
+for (i in 1:100) {
+  # Subsample
+  r <- rarefy_even_depth(TOX, sample.size = min_lib, verbose = FALSE, replace = TRUE)
+  
+  # Calculate richness
+  rich <- as.numeric(as.matrix(estimate_richness(r, measures = "Observed")))
+  richness[ ,i] <- rich
+  
+  # Calculate chao1
+  chao <- as.numeric(as.matrix(estimate_richness(r, measures = "Chao1")))
+  chao1[ ,i] <- rich
+  
+  # Calculate evenness
+  even <- as.numeric(as.matrix(estimate_richness(r, measures = "InvSimpson")))
+  evenness[ ,i] <- even
+}
+SampleID=row.names(richness)
+mean=apply(richness, 1, mean)
+sd=apply(richness, 1, sd)
+measure=rep("Richness", nsamp)
+rich_stats=data.frame(SampleID, mean, sd, measure)
+#create a dataframe for means and sd od chao1 estimates
+SampleID=row.names(chao1)
+mean=apply(chao1, 1, mean)
+sd=apply(chao1, 1, sd)
+measure=rep("Chao1", nsamp)
+chao_stats=data.frame(SampleID, mean, sd, measure)
+#create a dataframe fpr means and sd of evenness estimates
+SampleID=row.names(evenness)
+mean=apply(evenness, 1, mean)
+sd=apply(evenness, 1, sd)
+measure=rep("Inverse Simpson", nsamp)
+even_stats=data.frame(SampleID, mean, sd, measure)
+#combine richness and evenness
+alpha = rbind(rich_stats, chao_stats, even_stats)
+#add metadata to alpha dataframe
+s=data.frame(sample_data(TOX))
+names(s)[1]="SampleID"
+alphadiv=merge(alpha,s,by="SampleID")
+str(alphadiv)
+
+#library("writexl")
+#write_xlsx(alphadiv,"TOX2_bact_alphadiv.xlsx")
+
+```
+
+```{r, include = FALSE}
+alphadiv_soil=filter(alphadiv_ITS, Sample_Type == "soil")
+alphadiv_fluid=filter(alphadiv_ITS, Sample_Type == "fluid")
+
+#reshape fluid dataframe only
+colnames(alphadiv_fluid)[23] = "Sex"
+alphadiv_fluid_wide = alphadiv_fluid %>%
+  select(SampleID, mean, measure, Donor, Total_ADH, Season, Sex, Age, BMI, num_drugs, Cancer, Diabetes, Cardio, Respiratory, Neuro, Pneumonia)
+alphadiv_fluid_wide= dcast(alphadiv_fluid_wide, SampleID + Donor + Total_ADH + Season + Sex + Age + BMI + num_drugs + Cancer +Diabetes + Cardio + Respiratory + Neuro + Pneumonia ~ measure, value.var="mean")
+colnames(alphadiv_fluid_wide)[16]="InvSimp"
+
+#reshape soil dataframe only
+colnames(alphadiv_soil)[23] = "Sex"
+alphadiv_soil_wide = alphadiv_soil %>% select(SampleID, mean, measure, Donor, ADH, Total_ADH, Season,Sex, Age, BMI, Cancer, Diabetes, Cardio, Respiratory, Neuro, Pneumonia)
+alphadiv_soil_wide= dcast(alphadiv_soil_wide, SampleID + Donor + ADH + Total_ADH + Season + Sex + Age + BMI + Cancer +Diabetes + Cardio + Respiratory + Neuro + Pneumonia ~ measure, value.var="mean")
+colnames(alphadiv_soil_wide)[16]="InvSimp"
+
+#only keep timepoints that have more than two reps at that timepoint
+alphadiv_soil_clean = alphadiv_soil %>%
+  filter(Timepoint != "D")%>%
+  filter(Timepoint != "E")%>%
+  filter(Timepoint != "F") %>%
+  filter(Timepoint != "M") %>%
+  filter(Timepoint != "O") %>%
+  filter(Timepoint != "P") %>%
+  filter(Timepoint != "Q")
+
+alphadiv_soil_clean$Timepoint=factor(alphadiv_soil_clean$Timepoint, labels=c("Control","0 ADH","1500 ADH","3000 ADH","4500 ADH","6000 ADH","7500 ADH", "8500 ADH","13000 ADH"))
+
+ggplot(alphadiv_soil_clean, aes(x=Timepoint, y=mean, color=Timepoint))+geom_boxplot()+scale_x_discrete(labels=c("Control","0 ADH","1500 ADH","3000 ADH","4500 ADH","6000 ADH","7500 ADH", "8500 ADH","13000 ADH"))+theme_bw()+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+scale_color_manual(values=colpalette2, guide=FALSE)+facet_wrap(~measure, scales = "free_y")
+```
+
+
+### Fluid Alpha diversty:
+
+```{r, include = FALSE}
+#plot fluid alpha diversity (Chao1, Richness, and Inverse Simpson) by different factors
+
+#color by donor
+a=ggplot(alphadiv_fluid, aes(x=Donor, y=mean, fill=Donor)) + geom_bar(colour="black", stat="identity", ) + guides(fill=FALSE) + facet_wrap(~measure, ncol = 1, scales = "free") +theme(axis.title.x = element_blank(),axis.title.y = element_blank())+theme_bw()+ theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+#color by BMI
+b=ggplot(alphadiv_fluid, aes(x=Donor, y=mean, fill=BMI)) + geom_bar(colour="black", stat="identity", ) + facet_wrap(~measure, ncol = 1, scales = "free") +theme(axis.title.y = element_blank()) +scale_fill_viridis()+theme_bw()+ theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+#color by total ADH to complete active decomposition 
+c=ggplot(alphadiv_fluid, aes(x=Donor, y=mean, fill=Total_ADH)) + geom_bar(colour="black", stat="identity", ) + facet_wrap(~measure, ncol = 1, scales = "free") +theme(axis.title.y = element_blank()) +scale_fill_viridis()+theme_bw()+ theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+#color by season of placement
+d=ggplot(alphadiv_fluid, aes(x=Donor, y=mean, fill=Season)) + geom_bar(colour="black", stat="identity", ) + facet_wrap(~measure, ncol = 1, scales = "free") +theme(axis.title.y = element_blank())+theme_bw()+ theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+#color by number of drugs detected in serum
+e=ggplot(alphadiv_fluid, aes(x=Donor, y=mean, fill=num_drugs)) + geom_bar(colour="black", stat="identity", ) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + facet_wrap(~measure, ncol = 1, scales = "free") +theme(axis.title.y = element_blank()) +scale_fill_viridis() +theme_bw()+ theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+Fluid alpha diversity:
+
+```{r, echo=FALSE}
+a
+```
+
+
+Fluid alpha diversity and BMI:
+
+```{r, echo=FALSE}
+#plot alpha diversity of fluid fungal communities by donor BMI
+
+BMI_cat = metadata %>% filter(Per_ADH == "1") %>% select(Donor, BMI_level) #select donor BMI categories to add to alpha diversity dataframe
+alphadiv_fluid = alphadiv_fluid %>% left_join(BMI_cat, by = "Donor") #add BMI to alpha diversity dataframe
+
+#plot lm where numeric BMI is the independent factor
+ggplot(alphadiv_fluid, aes(x=BMI, y=mean)) + geom_point() +geom_smooth(method = "lm") + facet_wrap(~measure, ncol = 3, scales = "free")+theme_bw()
+
+#plot boxplots of alpha diversity by BMI category
+ggplot(alphadiv_fluid, aes(x=BMI_level, y=mean, color=BMI_level)) + geom_boxplot() + facet_wrap(~measure, ncol = 3, scales = "free")+theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))+stat_compare_means(method = "anova")
+```
+
+```{r, include=FALSE}
+#test: does Chao1 and/or inverse simpson in fluid samples vary due to subject BMI or BMI category?
+
+alphadiv_fluid_wide = alphadiv_fluid_wide %>% left_join(BMI_cat, by = "Donor")
+
+mod=lm(Chao1~BMI, data=alphadiv_fluid_wide)
+summary(mod)
+aov=anova(mod)
+BMI=aov[1,5]
+mod2=lm(InvSimp~BMI, data=alphadiv_fluid_wide)
+summary(mod2)
+aov2=anova(mod2)
+BMI2=aov2[1,5]
+
+mod3=lm(Chao1~BMI_level, data=alphadiv_fluid_wide)
+summary(mod3)
+aov3=anova(mod3)
+
+mod4=lm(InvSimp~BMI_level, data=alphadiv_fluid_wide)
+summary(mod4)
+aov4=anova(mod4)
+
+```
+
+LM:Chao1~BMI
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+LM:InvSimp~BMI
+```{r, echo=FALSE}
+kable(aov2, digits = 3)
+```
+
+BMI did not significantly alter richness (p= `r round(BMI, 3)`) or diversity (p= `r round(BMI2,3)`) in ITS fluid samples.
+
+Fluid alpha diversity and Total ADH:
+```{r, include=FALSE}
+#test: does Chao1 and/or inverse simpson in fluid samples vary due to total ADH to complete active decomposition?
+mod=lm(Chao1~Total_ADH, data=alphadiv_fluid_wide)
+summary(mod)
+aov=anova(mod)
+
+alphadiv_fluid_wide %>% filter(Total_ADH <= 5000) %>% summarise(mean_chao1_5000 = mean(Chao1))
+alphadiv_fluid_wide %>% filter(Total_ADH >= 10000) %>% summarise(mean_chao1_5000 = mean(Chao1))
+
+
+mod2=lm(InvSimp~Total_ADH, data=alphadiv_fluid_wide)
+summary(mod2)
+aov2=anova(mod2)
+```
+
+```{r, echo=FALSE}
+ggplot(alphadiv_fluid, aes(x=Total_ADH, y=mean)) + geom_point() +geom_smooth(method = "lm") + facet_wrap(~measure, ncol = 3, scales = "free")+theme_bw()
+```
+
+Fluid alpha diversity and Season:
+
+```{r, echo=FALSE}
+ggplot(alphadiv_fluid, aes(x=Season, y=mean, color=Season)) + geom_boxplot() + facet_wrap(~measure, ncol = 3, scales = "free")+theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1))+stat_compare_means(method = "anova")
+```
+
+
+```{r, include=FALSE}
+#test: does Chao1 and/or inverse simpson in fluid samples vary due to season of placement?
+mod=lm(Chao1~Season, data=alphadiv_fluid_wide)
+summary(mod)
+aov=anova(mod)
+Season=aov[1,5]
+mod2=lm(InvSimp~Season, data=alphadiv_fluid_wide)
+summary(mod2)
+aov2=anova(mod2)
+Season2=aov2[1,5]
+
+```
+
+LM:Chao1~Season
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+LM:InvSimp~Season
+```{r, echo=FALSE}
+kable(aov2, digits = 3)
+```
+
+Season did not significantly alter richness (p= `r round(Season, 3)`) or diversity (p= `r round(Season2,3)`) in ITS fluid samples.
+
+Fluid alpha diversity and Sex:
+
+```{r, echo=FALSE}
+ggplot(alphadiv_fluid, aes(x=Sex, y=mean, color=Sex)) + geom_boxplot() + facet_wrap(~measure, ncol = 3, scales = "free")+theme_bw() +stat_compare_means(method = "t.test")
+
+ggplot(alphadiv_fluid, aes(x=Season, y=mean, fill=Sex)) + geom_boxplot(position = position_dodge()) + facet_wrap(~measure, ncol = 3, scales = "free")+theme_bw()
+```
+
+
+```{r, include=FALSE}
+#test: does Chao1 and/or inverse simpson in fluid samples vary due to subject biological sex?
+mod=lm(Chao1~Sex, data=alphadiv_fluid_wide)
+summary(mod)
+aov=anova(mod)
+Sex=aov[1,5]
+mod2=lm(InvSimp~Sex, data=alphadiv_fluid_wide)
+summary(mod2)
+aov2=anova(mod2)
+Sex2=aov2[1,5]
+
+
+k=kruskal.test(Chao1~Sex, data=alphadiv_fluid_wide)
+k
+```
+
+LM:Chao1~Sex
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+LM:InvSimp~Sex
+```{r, echo=FALSE}
+kable(aov2, digits = 3)
+```
+
+Fluid alpha diversity and Age:
+
+```{r, echo=FALSE}
+ggplot(alphadiv_fluid, aes(x=Age, y=mean)) + geom_point() +geom_smooth(method = "lm") + facet_wrap(~measure, ncol = 3, scales = "free")+theme_bw()
+```
+
+
+```{r, include=FALSE}
+#test: does Chao1 and/or inverse simpson in fluid samples vary due to subject age?
+mod=lm(Chao1~Age, data=alphadiv_fluid_wide)
+summary(mod)
+aov=anova(mod)
+Age=aov[1,5]
+mod2=lm(InvSimp~Age, data=alphadiv_fluid_wide)
+summary(mod2)
+aov2=anova(mod2)
+Age2=aov2[1,5]
+```
+
+LM:Chao1~Age
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+LM:InvSimp~Age
+```{r, echo=FALSE}
+kable(aov2, digits = 3)
+```
+
+Fluid alpha diversity and the number of blood serum drugs:
+
+```{r, echo=FALSE}
+ggplot(alphadiv_fluid, aes(x=num_drugs, y=mean)) + geom_point() +geom_smooth(method = "lm") + facet_wrap(~measure, ncol = 3, scales = "free")+theme_bw()
+```
+
+```{r, include=FALSE}
+#test: does Chao1 and/or inverse simpson in fluid samples vary due to number of drugs detected in blood serum?
+mod=lm(Chao1~num_drugs, data=alphadiv_fluid_wide)
+summary(mod)
+aov=anova(mod)
+drugs=aov[1,5]
+mod2=lm(InvSimp~num_drugs, data=alphadiv_fluid_wide)
+summary(mod2)
+aov2=anova(mod2)
+drugs2=aov2[1,5]
+
+```
+
+### Fluid alpha diversity x illnesses
+```{r, include=FALSE}
+#test: does Chao1 and/or inverse simpson in fluid samples vary due to the presence of diseases at time of death?
+can_r=lm(Chao1~Cancer, data=alphadiv_fluid_wide)
+summary(can_r)
+can_i=lm(InvSimp~Cancer, data=alphadiv_fluid_wide)
+summary(can_i)
+aov=anova(can_r) #ns
+aov2=anova(can_i) #ns
+
+dia_r=lm(Chao1~Diabetes, data=alphadiv_fluid_wide)
+dia_i=lm(InvSimp~Diabetes, data=alphadiv_fluid_wide)
+aov3=anova(dia_r) #ns
+aov4=anova(dia_i) #ns
+
+car_r=lm(Chao1~Cardio, data=alphadiv_fluid_wide)
+summary(car_r)
+car_i=lm(InvSimp~Cardio, data=alphadiv_fluid_wide)
+summary(car_i)
+aov5=anova(car_r) #ns
+aov6=anova(car_i) #ns
+
+resp_r=lm(Chao1~Respiratory, data=alphadiv_fluid_wide)
+summary(resp_r)
+resp_i=lm(InvSimp~Respiratory, data=alphadiv_fluid_wide)
+summary(resp_i)
+aov7=anova(resp_r) #ns
+aov8=anova(resp_i) #ns
+
+neu_r=lm(Chao1~Neuro, data=alphadiv_fluid_wide)
+summary(neu_r)
+neu_i=lm(InvSimp~Neuro, data=alphadiv_fluid_wide)
+summary(neu_i)
+aov9=anova(neu_r) #ns
+aov10=anova(neu_i) #ns
+```
+
+LM:Chao1~Cancer
+```{r, echo=FALSE}
+kable(aov, digits = 3)
+```
+
+WILCOXON: Chao1~Cancer
+```{r,echo=FALSE}
+wilcox.test(alphadiv_fluid_wide$Chao1~alphadiv_fluid_wide$Cancer)
+```
+
+LM:InvSimp~Cancer
+```{r, echo=FALSE}
+kable(aov2, digits = 3)
+```
+
+WILCOXON: InvSimp~Cancer
+```{r,echo=FALSE}
+wilcox.test(alphadiv_fluid_wide$InvSimp~alphadiv_fluid_wide$Cancer)
+```
+
+LM:Chao1~Diabetes
+```{r, echo=FALSE}
+kable(aov3, digits = 3)
+```
+
+WILCOXON: Chao1~Diabetes
+```{r,echo=FALSE}
+wilcox.test(alphadiv_fluid_wide$Chao1~alphadiv_fluid_wide$Diabetes)
+```
+
+LM:InvSimp~Diabetes
+```{r, echo=FALSE}
+kable(aov4, digits = 3)
+```
+
+WILCOXON: InvSimp~Diabetes
+```{r,echo=FALSE}
+wilcox.test(alphadiv_fluid_wide$InvSimp~alphadiv_fluid_wide$Diabetes)
+```
+
+LM:Chao1~Cardio
+```{r, echo=FALSE}
+kable(aov5, digits = 3)
+```
+
+WILCOXON: Chao1~Cardio
+```{r,echo=FALSE}
+wilcox.test(alphadiv_fluid_wide$Chao1~alphadiv_fluid_wide$Cardio)
+```
+
+LM: InvSimp~Cardio
+```{r, echo=FALSE}
+kable(aov6, digits = 3)
+```
+
+WILCOXON: InvSimp~Cardio
+```{r,echo=FALSE}
+wilcox.test(alphadiv_fluid_wide$InvSimp~alphadiv_fluid_wide$Cardio)
+```
+
+LM:Chao1~Respiratory
+```{r, echo=FALSE}
+kable(aov7, digits = 3)
+```
+
+WILCOXON: Chao1~Respiratory
+```{r,echo=FALSE}
+wilcox.test(alphadiv_fluid_wide$Chao1~alphadiv_fluid_wide$Respiratory)
+```
+
+LM: InvSimp~Respiratory
+```{r, echo=FALSE}
+kable(aov8, digits = 3)
+```
+
+WILCOXON: InvSimp~Diabetes
+```{r,echo=FALSE}
+wilcox.test(alphadiv_fluid_wide$InvSimp~alphadiv_fluid_wide$Diabetes)
+```
+
+LM: Chao1~Neuro
+```{r, echo=FALSE}
+kable(aov9, digits = 3)
+```
+
+WILCOXON: Chao1~Neuro
+```{r,echo=FALSE}
+wilcox.test(alphadiv_fluid_wide$Chao1~alphadiv_fluid_wide$Neuro)
+```
+
+LM: InvSimp~Neuro
+```{r, echo=FALSE}
+kable(aov10, digits = 3)
+```
+
+WILCOXON: InvSimp~Neuro
+```{r,echo=FALSE}
+wilcox.test(alphadiv_fluid_wide$InvSimp~alphadiv_fluid_wide$Neuro)
+```
+
+```{r, include=FALSE}
+test=alphadiv_fluid_wide %>% select(SampleID, Chao1, InvSimp, Donor, Cancer, Diabetes, Cardio, Respiratory, Neuro, Pneumonia)
+test_wide=melt(test, id.vars = c("SampleID", "Chao1", "InvSimp", "Donor"))
+```
+
+Chao1 and Illnesses (Wilcoxon)
+```{r, echo=FALSE}
+ggplot(test_wide, aes(value, Chao1)) + geom_point(stat= "identity") + facet_grid(~variable, scales = "free") +stat_compare_means(method="wilcox.test", label="p.format", hjust=-0.25)
+```
+Inverse Simpson and Illnesses (Wilcoxon)
+```{r, echo=FALSE}
+ggplot(test_wide, aes(value, InvSimp)) + geom_point(stat= "identity") + facet_grid(~variable, scales = "free") +stat_compare_means(method="wilcox.test", label="p.format", hjust=-0.25)
+```
+
+### Soil Alpha diversity
+
+```{r, include=FALSE}
+#line plot; y=alpha div value, x=ADH, grouped/colored by donor and faceted by measurement
+a=ggplot(alphadiv_soil, aes(x=ADH, y=mean, group=Donor)) + geom_line(aes(color=Donor),size=1)+geom_point()+facet_wrap(~measure, ncol=1, scales="free")+scale_color_manual(values=colpalette2)
+
+#boxplot; y=alpha div value, x=Timepoint, faceted by alpha div measure
+soil_boxplot_x_names=c("Control", "0", "250","500","1000","1500", "3000", "4500", "6000", "7500", "8500", "11500", "13000", "15500", "17500","18500")
+
+b=ggplot(alphadiv_soil, aes(x=Timepoint, y=mean, fill=Timepoint)) +geom_boxplot(position = position_dodge(0.8))+facet_wrap(~measure, ncol=1, scales="free")+scale_x_discrete(labels=soil_boxplot_x_names)+scale_fill_manual(values=colpalette2)+ theme(axis.text.x = element_text(angle = 360, hjust = .5),legend.position = "none",axis.title.y = element_blank())
+```
+
+```{r, echo=FALSE}
+a
+```
+
+```{r, echo=FALSE}
+b
+```
+
+
+## Beta diversity and PERMANOVA
+
+### All Samples
+
+```{r, include=FALSE}
+smin = min(sample_sums(TOX))
+#min=13193
+smean = mean(sample_sums(TOX))
+#mean=67443.34
+smax = max(sample_sums(TOX))
+#max=251613
+TOX_scale=rarefy_even_depth(TOX, sample.size = smin, replace = TRUE, rngseed = 1)
+```
+
+All TOX samples PCoA
+
+```{r, include=FALSE}
+#using all samples (fluid and soil) calculate Bray-Curtis distances and visualize via PCoA
+bray_all=distance(TOX_scale, "bray")
+TOX1_bray_all = ordinate(physeq = TOX_scale, method = "PCoA", distance = "bray")
+Bray_all=plot_ordination(physeq=TOX_scale, ordination=TOX1_bray_all, color="Timepoint", shape="Trt", title= "PCoA Fungal Communitites: Bray (001-020)") + geom_point(aes(color = Timepoint), alpha = 0.7, size=4)+geom_point(colour="grey90", size=1.5) + scale_color_discrete(breaks=c("A", "C", "B", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M","N","O","P","Q"),labels=c("Control", "0", "Fluid","250","500","1000","1500", "3000", "4500", "6000", "7500", "8500", "11500", "13000", "15500", "17500","18500"))
+
+```
+
+```{r, echo=FALSE}
+Bray_all
+```
+
+```{r, include=FALSE}
+#test1: does community composition differ between control and decomposition samples?
+#test2: does community composition differ between control, decomposition, and fluid samples?
+
+trts= data.frame(sample_data(TOX_scale))
+perm=adonis(bray_all~Trt, data=trts, permutations=1000, by="margin")
+perm2=adonis(bray_all~Sample_Type, data=trts, permutations=1000, by="margin")
+```
+
+PERMANOVA:bray_all~Trt
+```{r, echo=FALSE}
+kable(perm$aov.tab, digits = 3)
+```
+
+PERMANOVA:bray_all~Sample_Type
+```{r, echo=FALSE}
+kable(perm2$aov.tab, digits = 3)
+```
+
+### Fluid communities only
+```{r, include=FALSE}
+#calculate Bray-curtis distances between fluid samples only and visualize with PCoA
+TOX_scale_fluid=subset_samples(TOX_scale, Sample_Type == "fluid")
+bray_fluid=distance(TOX_scale_fluid, "bray")
+TOX1_bray_fluid = ordinate(physeq = TOX_scale_fluid, method = "PCoA", distance = "bray")
+
+#fluid community beta diversity colored by donor
+Bray_fluid=plot_ordination(physeq=TOX_scale_fluid, ordination=TOX1_bray_fluid, color="Donor", title= "PCoA of Fluid Fungal Communitites: Bray (001-020)") + geom_point(aes(color = Donor), alpha = 1.5, size=4)+geom_point(size=1.5) + scale_color_manual(values = colpalette2)+theme_bw()
+
+#fluid diversity by BMI and donors labeled
+plot_ordination(physeq=TOX_scale_fluid, ordination=TOX1_bray_fluid, color="BMI", title= "PCoA of Fluid Fungal Communitites: Bray (001-020)") + geom_point(aes(color=BMI), alpha = 1, size=4)+geom_text(aes(label=Donor),hjust=.5, vjust=2)+scale_color_viridis()+theme_bw()
+
+#fluid diversity by Age
+plot_ordination(physeq=TOX_scale_fluid, ordination=TOX1_bray_fluid, color="Age", title= "PCoA of Fluid Fungal Communitites: Bray (001-020)") + geom_point(aes(color=Age), alpha = 1, size=4) + scale_color_viridis()+theme_bw()
+
+#Age x Season
+plot_ordination(physeq=TOX_scale_fluid, ordination=TOX1_bray_fluid, color="Age", title= "PCoA of Fluid Fungal Communitites: Bray (001-020)") + geom_point(aes(color=Age,shape=Season), alpha = 1, size=4) + scale_color_viridis()+theme_bw()
+```
+
+Fluid bacterial PCoA:
+
+```{r, echo=FALSE}
+Bray_fluid
+```
+
+Fluid bacterial PCoA and number of drugs in blood:
+
+```{r, echo=FALSE}
+#fluid community beta diversity colored by number of drugs in blood
+plot_ordination(physeq=TOX_scale_fluid, ordination=TOX1_bray_fluid, color="num_drugs", title= "PCoA of Fluid Fungal Communitites: Bray (001-020)") + geom_point(aes(color=num_drugs), alpha = 1, size=4) + scale_color_viridis()+theme_bw()
+```
+
+Fluid bacterial PCoA and total ADH:
+
+```{r, echo=FALSE}
+#fluid diversity by total ADH
+plot_ordination(physeq=TOX_scale_fluid, ordination=TOX1_bray_fluid, color="Total_ADH", title= "PCoA of Fluid Fungal Communitites: Bray (001-020)") + geom_point(aes(color=Total_ADH), alpha = 1, size=4) +scale_color_viridis()+theme_bw()
+```
+
+Fluid bacterial PCoA and Season:
+
+```{r, echo=FALSE}
+#fluid diversity by season
+plot_ordination(physeq=TOX_scale_fluid, ordination=TOX1_bray_fluid, color="Season", title= "PCoA of Fluid Fungal Communitites: Bray (001-020)") + geom_point(aes(color=Season), alpha = 1, size=4)+ scale_color_manual(values = colpalette2)
+```
+
+Fluid bacterial PCoA and BMI:
+
+```{r, echo=FALSE}
+#fluid diversity by BMI
+plot_ordination(physeq=TOX_scale_fluid, ordination=TOX1_bray_fluid, color="BMI", title= "PCoA of Fluid Fungal Communitites: Bray (001-020)") + geom_point(aes(color=BMI), alpha = 1, size=4)+scale_color_viridis()+theme_bw()
+```
+
+Fluid bacerial PCoA and Season/BMI:
+
+```{r, echo=FALSE}
+#BMI x Season
+plot_ordination(physeq=TOX_scale_fluid, ordination=TOX1_bray_fluid, color="BMI", title= "PCoA of Fluid Fungal Communitites: Bray (001-020)") + geom_point(aes(color=Weight,shape=Season), alpha = 1, size=4) +scale_color_viridis()+theme_bw()
+```
+
+```{r, include=FALSE}
+#test: does beta diversity (as Bray-Curtis) vary due to different variables including total ADH, season of placement, biological sex, age, BMI, BMI category, and presence/absence of diseases
+trts.fluid= data.frame(sample_data(TOX_scale_fluid))
+trts.fluid = trts.fluid %>% left_join(ill, by = c("Donor","Trt"))
+
+perm=adonis(bray_fluid~Total_ADH, data=trts.fluid, permutations=1000, by="margin")
+perm2=adonis(bray_fluid~Season, data=trts.fluid, permutations=1000, by="margin")
+perm3=adonis(bray_fluid~Total_ADH+Season+BMI, data=trts.fluid, permutations=1000, by="margin")
+perm4=adonis(bray_fluid~Total_ADH+Cancer+Diabetes+Cardio+Respiratory+Neuro, data=trts.fluid, permutations=1000, by="margin")
+
+perm5 = adonis(bray_fluid~Sex, data=trts.fluid, permutations=1000, by="margin")
+perm6 = adonis(bray_fluid~Age, data=trts.fluid, permutations=1000, by="margin")
+perm7 = adonis(bray_fluid~BMI, data=trts.fluid, permutations=1000, by="margin")
+perm8= adonis(bray_fluid~BMI_level, data=trts.fluid, permutations=1000, by="margin")
+perm9 = adonis(bray_fluid~num_drugs, data=trts.fluid, permutations=1000, by="margin")
+
+perm10 = adonis(bray_fluid~Cancer.y, data=trts.fluid, permutations=1000, by="margin")
+perm11 = adonis(bray_fluid~Cardio.y, data=trts.fluid, permutations=1000, by="margin")
+perm12 = adonis(bray_fluid~Respiratory.y, data=trts.fluid, permutations=1000, by="margin")
+perm13 = adonis(bray_fluid~Neuro.y, data=trts.fluid, permutations=1000, by="margin")
+
+```
+
+PERMANOVA:bray_fluid~Total_ADH
+```{r, echo=FALSE}
+kable(perm$aov.tab, digits = 3)
+```
+
+PERMANOVA:bray_fluid~Total_ADH+Season+BMI
+```{r, echo=FALSE}
+kable(perm3$aov.tab, digits = 3)
+```
+
+PERMANOVA:bray_fluid~Total_ADH+Cancer+Diabetes+Cardio+Respiratory+Neuro
+```{r, echo=FALSE}
+kable(perm4$aov.tab, digits = 3)
+```
+
+### Soil communities -- Controls only
+```{r, include=FALSE}
+#look at beta diversity in control soil samples only - looking at natural variation over time other than decomposition 
+TOX_scale_soil_con=subset_samples(TOX_scale, Sample_Type == "soil")
+TOX_scale_soil_con=subset_samples(TOX_scale_soil_con, Trt == "control")
+
+bray_soil_con=distance(TOX_scale_soil_con, "bray")
+bray_soil_con_ord = ordinate(physeq = TOX_scale_soil_con, method = "PCoA", distance = "bray")
+
+bray_soil_con_ordplot=plot_ordination(physeq=TOX_scale_soil_con, ordination=bray_soil_con_ord, color="Donor", shape="Season", title= "Soil control Communitites: Bray (001-020)") + geom_point(aes(color = Donor), alpha = 0.7, size=4)+geom_point(colour="grey90", size=1.5) + scale_color_manual(values = colpalette2)+stat_ellipse(aes(fill=factor(Season)), geom="polygon", level=0.95, alpha=0.2)
+
+soil_con_season=plot_ordination(physeq=TOX_scale_soil_con, ordination=bray_soil_con_ord, color="Season", title= "Soil control Communitites: Bray (001-020)") + geom_point(aes(color = Season), alpha = 0.7, size=4) + stat_ellipse(type = "t") + theme_bw()
+
+```
+
+```{r, echo=FALSE}
+soil_con_season
+```
+
+```{r, include=FALSE}
+#see if controls differ by season:
+
+#create a distance object
+soil_con_bray <- phyloseq::distance(TOX_scale_soil_con, method = "bray")
+
+# make a data frame from the sample_data
+soil_con_df <- data.frame(sample_data(TOX_scale_soil_con))
+
+# Adonis test
+soil_con_perm=adonis(soil_con_bray ~ Season, data = soil_con_df)
+
+# Homogeneity of dispersion test
+beta <- betadisper(soil_con_bray, soil_con_df$Season)
+beta_permu=permutest(beta)
+
+beta.dist=as.data.frame(beta$distances) #we want to make a box plot and add the tukey results, so we need the distance values from the beta dispersion object (here it is homo)
+beta.df=cbind(soil_con_df,beta.dist) #bind with the metadata
+colnames(beta.df)[34]="dispersion"
+```
+
+### Soil communities ONLY
+```{r, include=FALSE}
+#look at beta diversity between all soil samples
+TOX_scale_soil=subset_samples(TOX_scale, Sample_Type == "soil") #remove fluid samples
+TOX_scale_soil=subset_samples(TOX_scale_soil, group != "TOX002_1500A")
+TOX_scale_soil=subset_samples(TOX_scale_soil, group != "TOX002_1500B")
+
+TOX1_bray_soil = ordinate(physeq = TOX_scale_soil, method = "PCoA", distance = "bray")
+bray_soil=distance(TOX_scale_soil, "bray")
+
+#color gradient by time
+#plot_ordination(physeq=TOX_scale_soil, ordination=TOX1_bray_soil, color="Timepoint", title= "PCoA of TOX1 Soil Fungal Communitites: Bray") + geom_point(aes(color = Timepoint), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5) + scale_color_manual(values = color(16), labels=c("Control", "0", "Fluid","250","500","1000","1500", "3000", "4500", "6000", "7500", "8500", "11500", "13000", "15500", "17500","18500"))+theme_bw()
+
+plot_ordination(physeq=TOX_scale_soil, ordination=TOX1_bray_soil, color="Per_ADH", title= "PCoA of TOX1 Soil Fungal Communitites: Bray") + geom_point(aes(color = Per_ADH), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5)+scale_color_viridis()+theme_bw()
+
+plot_ordination(physeq=TOX_scale_soil, ordination=TOX1_bray_soil, shape="Trt", color="Donor", title= "PCoA of TOX1 Soil Fungal Communitites: Bray") + geom_point(aes(color = Donor), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5) + scale_color_manual(values = colpalette2)+theme_bw()+scale_shape_manual(values=c(8, 19))
+
+plot_ordination(physeq=TOX_scale_soil, ordination=TOX1_bray_soil, shape="Trt", color="Per_ADH", title= "PCoA of TOX1 Soil Fungal Communitites: Bray") + geom_point(aes(color = Per_ADH), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5)+scale_shape_manual(values=c(8, 19))+scale_color_viridis()+theme_bw()
+
+plot_ordination(physeq=TOX_scale_soil, ordination=TOX1_bray_soil, shape="Trt", color="Per_ADH", title= "PCoA of TOX1 Soil Bacterial Communitites: Bray") + geom_point(aes(color = Per_ADH),  size=1)+geom_point(size=1.5) + scale_color_viridis() +theme_bw()+scale_shape_manual(values=c(8, 19))
+```
+
+Soil communities PCoA
+
+```{r, echo=FALSE}
+Bray_soil=plot_ordination(physeq=TOX_scale_soil, ordination=TOX1_bray_soil, color="Timepoint", shape="Trt", title= "PCoA of TOX1 Soil Fungal Communitites: Bray") + geom_point(aes(color = Timepoint), alpha = 0.7, size=4)+geom_point(colour="grey90", size=1.5) + scale_color_manual(values = colpalette2,labels=c("Control", "0", "Fluid","250","500","1000","1500", "3000", "4500", "6000", "7500", "8500", "11500", "13000", "15500", "17500","18500"))
+Bray_soil
+```
+
+Soil communities PCoA: Donor and Percent ADH
+
+```{r, echo=FALSE}
+plot_ordination(physeq=TOX_scale_soil, ordination=TOX1_bray_soil, color="Per_ADH", shape="Donor", title= "PCoA of TOX1 Soil Fungal Communities: Bray") + geom_point(aes(color = Per_ADH), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5)+scale_shape_manual(values=c(0:20))+scale_color_viridis()+theme_bw()
+```
+
+Soil communities PCoA: Cancer
+
+```{r, echo=FALSE}
+#shape by treatment and color by cancer
+plot_ordination(physeq=TOX_scale_soil, ordination=TOX1_bray_soil, color="Cancer", shape="Trt", title= "PCoA of TOX1 Soil Fungal Communitites: Bray") + geom_point(aes(color = Cancer), alpha = 0.7, size=4)+geom_point(colour="grey90", size=1.5) + scale_color_manual(values = colpalette2,labels=c("No", "Yes"))
+```
+
+Soil communities PCoA: Cardio
+
+```{r, echo=FALSE}
+#shape by treatment and color by cardio
+plot_ordination(physeq=TOX_scale_soil, ordination=TOX1_bray_soil, color="Cardio", shape="Trt", title= "PCoA of TOX1 Soil Fungal Communitites: Bray") + geom_point(aes(color = Cardio), alpha = 0.7, size=4)+geom_point(colour="grey90", size=1.5) + scale_color_manual(values = colpalette2,labels=c("No", "Yes"))
+```
+
+Soil communities PCoA: Sector
+
+```{r, echo=FALSE}
+#shape by treatment and color by Sector
+plot_ordination(physeq=TOX_scale_soil, ordination=TOX1_bray_soil, color="Sector", shape="Trt", title= "PCoA of TOX1 Soil Fungal Communitites: Bray") + geom_point(aes(color = Sector), alpha = 0.7, size=4)+geom_point(colour="grey90", size=1.5) + scale_color_manual(values = colpalette2)+theme_bw()
+```
+
+```{r, include=FALSE}
+TOX_ITS_soil_PCs = as.data.frame(TOX1_bray_soil$vectors)
+TOX_ITS_soil_PCs$group = row.names(TOX_ITS_soil_PCs)
+TOX_ITS_soil_PC1 = TOX_ITS_soil_PCs %>%
+  select(Axis.1, group)
+
+trts.soil= data.frame(sample_data(TOX_scale_soil))
+TOX_ITS_soil_PC1 = TOX_ITS_soil_PC1 %>%
+  left_join(trts.soil, by = "group")
+
+ggplot(TOX_ITS_soil_PC1, aes(ADH, Axis.1, group=Donor, color=Donor)) + geom_line(stat = "identity", size=2)+scale_color_manual(values=colpalette2) #this is similar to beta dispersion, and I like the beta dispersion analysis better (plus I can run stats on beta disp
+
+ggplot(TOX_ITS_soil_PC1, aes(Per_ADH, Axis.1, group=Donor, color=Donor)) + geom_line(stat = "identity", size=2)+scale_color_manual(values=colpalette2) # less conversion of points when looking at % ADH compared to ADH
+
+ggplot(TOX_ITS_soil_PC1, aes(ADH, Axis.1, group=Donor, color=BMI)) + geom_line(stat = "identity", size=2)+scale_color_viridis()+theme_bw()
+```
+
+
+
+```{r, include=FALSE}
+#permanova: does beta diversity vary between control and decomposition soil samples?
+trts.soil= data.frame(sample_data(TOX_scale_soil))
+perm=adonis(bray_soil~ADH*Trt, data=trts.soil, permutations=1000, by="margin")
+```
+
+PERMANOVA:bray_soil~ADH * Trt, data=trts.soil, permutations=1000, by="margin"
+```{r, echo=FALSE}
+kable(perm$aov.tab, digits = 3)
+```
+
+## Beta disperstion anlysis
+
+### Soil: all timepoints 
+```{r, include=FALSE}
+#run beta dispersion with all soil samples across all timepoints and various metadata parameters
+homo=with(trts.soil,betadisper(bray_soil, Donor)) #0.7168 ; p=0.789
+a=permutest(homo)
+donor=a$tab[1,4:6]
+homo=with(trts.soil,betadisper(bray_soil, Season)) #2.4831 ; 0.059 .
+b=permutest(homo)
+Season=b$tab[1,4:6]
+homo=with(trts.soil,betadisper(bray_soil, Sector)) #6.1276 ; 0.002 **
+c=permutest(homo)
+Sector=c$tab[1,4:6]
+homo=with(trts.soil,betadisper(bray_soil, Trt)) #1.2435 ;  0.262
+d=permutest(homo)
+Trt=d$tab[1,4:6]
+homo=with(trts.soil,betadisper(bray_soil, Sex)) #0.0548 ; 0.819
+e=permutest(homo)
+sex=e$tab[1,4:6]
+homo=with(trts.soil,betadisper(bray_soil, Cancer)) #1.8908;   0.169
+f=permutest(homo)
+cancer=f$tab[1,4:6]
+homo=with(trts.soil,betadisper(bray_soil, Diabetes)) #0.7945 ; 0.404
+g=permutest(homo)
+diabetes=g$tab[1,4:6]
+homo=with(trts.soil,betadisper(bray_soil, Cardio)) #0.6794 ; 0.42
+h=permutest(homo)
+cardio=h$tab[1,4:6]
+homo=with(trts.soil,betadisper(bray_soil, Respiratory)) #7.6127 ; 0.012 *
+i=permutest(homo)
+resp=i$tab[1,4:6]
+homo=with(trts.soil,betadisper(bray_soil, Neuro)) #1.0855 ; 0.295
+j=permutest(homo)
+neuro=j$tab[1,4:6]
+homo=with(trts.soil,betadisper(bray_soil, Pneumonia)) #8.4462 ;  0.006 **
+k=permutest(homo)
+pneu=k$tab[1,4:6]
+homo=with(trts.soil,betadisper(bray_soil, Timepoint)) #11.174 ;  0.001 ***
+l=permutest(homo)
+time=l$tab[1,4:6]
+homo=with(trts.soil,betadisper(bray_soil, BMI_level)) #8.7824 ; 0.001 ***
+m=permutest(homo)
+BMI=m$tab[1,4:6]
+
+test=rbind(donor,Season,Sector,Trt,sex,cancer,diabetes,cardio,resp,neuro,pneu,time,BMI)
+test$Variable=c("Donor","Season","Sector","Treatment","Sex","Cancer","Diabetes","Cardiovascular","Respiratory","Neurological","Pneumonia","Timepoint","BMI category")
+test2=test[,c(4,1,2,3)]
+row.names(test2)=NULL
+```
+
+Betadispr results:
+```{r, echo=FALSE}
+kable(test2, digits = 3)
+```
+
+We will want to investigate the following variables with pairwise tukey tests: Donor (to compare to 16S), Sector, Respiratory, and Timepoint. 
+
+```{r, include=FALSE}
+#look at disperion between donors
+homo=with(trts.soil,betadisper(bray_soil, Donor)) #make an object of the betadispersion analysis
+plot(homo) #view dispersion
+boxplot(homo) #view dispersion values as a boxplot
+permutest(homo) #similar to anova, test for significant differences in dipersion (sig result = reject null that dispersion amung groups is the same-aka they are different); if they are different, we can run TukeyHSD to see which groups significantly differ from eachother
+
+homo.t=TukeyHSD(homo) #run tukey HSD test
+
+plot(homo.t) #view base R tukey test (shows the 95% confidence levels for each comparison)
+homo.dist=as.data.frame(homo$distances) #we want to make a boxplot and add the tukey results, so we need the distance values from the deta dispersion object (here it is homo)
+homo.df=cbind(trts.soil,homo.dist) #bind with the metadata
+colnames(homo.df)[46]="dispersion" #rename the new column "dispersion"
+
+# I need to group the treatments that are not different each other together.
+generate_label_df <- function(homo.t, Donor){
+  
+  # Extract labels and factor levels from Tukey post-hoc 
+  Tukey.levels <- homo.t$group[,4]
+  Tukey.labels <- data.frame(multcompLetters(Tukey.levels)['Letters'])
+  
+  #I need to put the labels in the same order as in the boxplot :
+  Tukey.labels$Donor=rownames(Tukey.labels)
+  Tukey.labels=Tukey.labels[order(Tukey.labels$Donor) , ]
+  return(Tukey.labels)
+}
+
+# Apply the function on my dataset
+labels=generate_label_df(homo.t , "homo.df$Donor")#generate labels using function
+names(labels)=c('Letters','Donor')#rename columns for merging
+yvalue = homo.df %>%group_by(Donor) %>%summarise(dispersion=max(dispersion))# obtain letter position for y axis using means; this will not work properly if plyr is loaded
+final=merge(labels,yvalue) #merge dataframes
+
+a=ggplot(homo.df, aes(x=Donor, y=dispersion, fill=Donor)) +geom_boxplot(position=position_dodge(0.8)) +geom_dotplot(binaxis='y', stackdir='center', stackratio=1.5, dotsize=.3,position=position_dodge(0.8))+scale_fill_manual(values=colpalette2)+geom_text(data = final, aes(x = Donor, y = .8, label = Letters),size=5)+theme_bw()+theme(axis.text.x = element_text(angle = 90,vjust = .5))
+```
+
+Beta dispersion pairwise comparisons: Donor
+
+```{r, echo=FALSE}
+a
+```
+
+```{r, include=FALSE}
+#look at dispersion between timepoints that are =< 8500 ADH 
+TOX_scale_soil_sub=subset_samples(TOX_scale_soil, Timepoint != "D")
+TOX_scale_soil_sub=subset_samples(TOX_scale_soil_sub, Timepoint != "E")
+TOX_scale_soil_sub=subset_samples(TOX_scale_soil_sub, Timepoint != "F")
+TOX_scale_soil_sub=subset_samples(TOX_scale_soil_sub, Timepoint != "M")
+TOX_scale_soil_sub=subset_samples(TOX_scale_soil_sub, Timepoint != "N")
+TOX_scale_soil_sub=subset_samples(TOX_scale_soil_sub, Timepoint != "O")
+TOX_scale_soil_sub=subset_samples(TOX_scale_soil_sub, Timepoint != "P")
+TOX_scale_soil_sub=subset_samples(TOX_scale_soil_sub, Timepoint != "Q")
+
+                                 
+bray_soil_sub=distance(TOX_scale_soil_sub, "bray")
+trts.soil_sub= data.frame(sample_data(TOX_scale_soil_sub))
+
+homo=with(trts.soil_sub,betadisper(bray_soil_sub, Timepoint)) #make an object of the betadispersion analysis
+plot(homo) #view dispersion
+boxplot(homo) #view dispersion values as a boxplot
+permutest(homo) #similar to anova, test for significant differences in dipersion (sig result = reject null that dispersion amung groups is the same-aka they are different); if they are different, we can run TukeyHSD to see which groups significantly differ from eachother
+
+homo.t=TukeyHSD(homo) #run tukey HSD test
+
+plot(homo.t) #view base R tukey test (shows the 95% confidence levels for each comparison)
+homo.dist=as.data.frame(homo$distances) #we want to make a boxplot and add the tukey results, so we need the distance values from the deta dispersion object (here it is homo)
+homo.df=cbind(trts.soil_sub,homo.dist) #bind with the metadata
+colnames(homo.df)[46]="dispersion" #rename the new column "dispersion"
+
+# I need to group the treatments that are not different each other together.
+generate_label_df <- function(homo.t, Timepoint){
+  
+  # Extract labels and factor levels from Tukey post-hoc 
+  Tukey.levels <- homo.t$group[,4]
+  Tukey.labels <- data.frame(multcompLetters(Tukey.levels)['Letters'])
+  
+  #I need to put the labels in the same order as in the boxplot :
+  Tukey.labels$Timepoint=rownames(Tukey.labels)
+  Tukey.labels=Tukey.labels[order(Tukey.labels$Timepoint) , ]
+  return(Tukey.labels)
+}
+
+# Apply the function on my dataset
+labels=generate_label_df(homo.t , "homo.df$Timepoint")#generate labels using function
+names(labels)=c('Letters','Timepoint')#rename columns for merging
+yvalue = homo.df %>%group_by(Timepoint) %>%summarise(dispersion=max(dispersion))# obtain letter position for y axis using means; this will not work properly if plyr is loaded
+final=merge(labels,yvalue) #merge dataframes
+
+#timepoint colors (need 8)
+tp_cols = c("lightcoral","blue4","tan","cyan","maroon4","aquamarine3", "darkolivegreen4","darkorchid4")
+
+
+a=ggplot(homo.df, aes(x=Timepoint, y=dispersion, fill=Timepoint)) +geom_boxplot(position=position_dodge(0.8)) +geom_dotplot(binaxis='y', stackdir='center', stackratio=1.5, dotsize=.3,position=position_dodge(0.8))+scale_fill_manual(values=tp_cols)+geom_text(data = final, aes(x = Timepoint, y = .8, label = Letters),size=5)+theme(axis.text.x = element_text(angle = 45,vjust = .5))+ scale_x_discrete(labels=c("A" = "Control", "B" = "0 ADH", "G" = "1500 ADH", "H" = "3000 ADH", "I" = "4500 ADH", "J" = "6000 ADH", "K" = "7500 ADH", "L" = "8500 ADH"))+theme_bw()
+```
+
+Beta dispersion pairwise comparisons: Timepoint
+
+```{r, echo=FALSE}
+a
+```
+
+```{r, include=FALSE}
+#run PERMANOVAs for different factors and all timepoints
+TOX_scale_soil_donor=subset_samples(TOX_scale_soil, Trt == "donor") #remove fluid samples
+
+TOX1_bray_soil_donor = ordinate(physeq = TOX_scale_soil_donor, method = "PCoA", distance = "bray")
+bray_soil_donor=distance(TOX_scale_soil_donor, "bray")
+
+trts.soil_donor= data.frame(sample_data(TOX_scale_soil_donor))
+perm=adonis(bray_soil_donor~ADH, data=trts.soil_donor, permutations=1000, by="margin")
+perm2=adonis(bray_soil_donor~ADH*BMI, data=trts.soil_donor, permutations=1000, by="margin")
+perm3=adonis(bray_soil_donor~ADH*Cancer, data=trts.soil_donor, permutations=1000, by="margin")
+perm4=adonis(bray_soil_donor~ADH*num_drugs, data=trts.soil_donor, permutations=1000, by="margin")
+perm5=adonis(bray_soil_donor~ADH*Season, data=trts.soil_donor, permutations=1000, by="margin")
+perm6=adonis(bray_soil_donor~ADH*Respiratory, data=trts.soil_donor, permutations=1000, by="margin")
+perm7=adonis(bray_soil_donor~ADH*Cardio, data=trts.soil_donor, permutations=1000, by="margin")
+perm8=adonis(bray_soil_donor~ADH*Neuro, data=trts.soil_donor, permutations=1000, by="margin")
+perm9=adonis(bray_soil_donor~ADH*Total_ADH, data=trts.soil_donor, permutations=1000, by="margin")
+perm10=adonis(bray_soil_donor~ADH*Sex, data=trts.soil_donor, permutations=1000, by="margin")
+perm11=adonis(bray_soil_donor~ADH*Age, data=trts.soil_donor, permutations=1000, by="margin")
+perm12=adonis(bray_soil_donor~ADH*BMI_level, data=trts.soil_donor, permutations=1000, by="margin")
+
+#plot where samples are colored by BMI category
+plot_ordination(physeq=TOX_scale_soil, ordination=TOX1_bray_soil_donor, color="BMI_level", title= "PCoA of TOX1 Soil Fungal Communitites: Bray") + geom_point(aes(color = BMI_level), alpha = 4, size=4) + theme_bw()
+
+#plot where samples are colored by percent ADH
+plot_ordination(physeq=TOX_scale_soil, ordination=TOX1_bray_soil_donor, color="Per_ADH", shape="BMI_level", title= "PCoA of TOX1 Soil Fungal Communitites: Bray") + geom_point(aes(color = Per_ADH), alpha = 4, size=4) + scale_color_viridis() + theme_bw()
+```
+
+```{r, include=FALSE}
+#dispersion among decomposition soils of different BMI categories
+homo=with(trts.soil_donor,betadisper(bray_soil_donor, BMI_level)) #7.0111 ; p=0.002
+a=permutest(homo) #similar to anova, test for significant differences in dipersion (sig result = reject null that dispersion amung groups is the same-aka they are different); if they are different, we can run TukeyHSD to see which groups significantly differ from each other
+
+boxplot(homo) #view dispersion values as a boxplot
+
+homo.t=TukeyHSD(homo) #run tukey HSD test
+
+plot(homo.t) #view base R tukey test (shows the 95% confidence levels for each comparison)
+homo.dist=as.data.frame(homo$distances) #we want to make a boxplot and add the tukey results, so we need the distance values from the deta dispersion object (here it is homo)
+homo.df=cbind(trts.soil_donor,homo.dist) #bind with the metadata
+colnames(homo.df)[46]="dispersion" #rename the new column "dispersion"
+
+# I need to group the treatments that are not different each other together.
+generate_label_df <- function(homo.t, BMI_level){
+  
+  # Extract labels and factor levels from Tukey post-hoc 
+  Tukey.levels <- homo.t$group[,4]
+  Tukey.labels <- data.frame(multcompLetters(Tukey.levels)['Letters'])
+  
+  #I need to put the labels in the same order as in the boxplot :
+  Tukey.labels$BMI_level=rownames(Tukey.labels)
+  Tukey.labels=Tukey.labels[order(Tukey.labels$BMI_level) , ]
+  return(Tukey.labels)
+}
+
+# Apply the function on my dataset
+labels=generate_label_df(homo.t , "homo.df$BMI_level")#generate labels using function
+names(labels)=c('Letters','BMI_level')#rename columns for merging
+yvalue = homo.df %>%group_by(BMI_level) %>%summarise(dispersion=max(dispersion))# obtain letter position for y axis using means; this will not work properly if plyr is loaded
+final=merge(labels,yvalue) #merge dataframes
+
+ggplot(homo.df, aes(x=BMI_level, y=dispersion, fill=BMI_level)) +geom_boxplot(position=position_dodge(0.8)) +geom_dotplot(binaxis='y', stackdir='center', stackratio=1.5, dotsize=.3,position=position_dodge(0.8))+scale_fill_manual(values=colpalette2)+geom_text(data = final, aes(x = BMI_level, y = .8, label = Letters),size=5)+theme(axis.text.x = element_text(angle = 45,vjust = .5))+theme_bw()
+```
+
+### Soil PCoA and PERMANOVA through 6000
+```{r, include=FALSE}
+TOX_scale_soil_0_6000=subset_samples(TOX_scale_soil_sub, Timepoint != "K") 
+TOX_scale_soil_0_6000=subset_samples(TOX_scale_soil_0_6000, Timepoint != "L") #97 samples
+
+bray_pcoa_soil_0_6000 = ordinate(physeq = TOX_scale_soil_0_6000, method = "PCoA", distance = "bray")
+
+plot_ordination(physeq=TOX_scale_soil_0_6000, ordination=bray_pcoa_soil_0_6000, color="Per_ADH", title= "PCoA of TOX1 Soil Fungal Communities: Bray") + geom_point(aes(color = Per_ADH), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5) + scale_color_viridis() + theme_bw()
+```
+
+
+```{r, include=FALSE}
+plot_ordination(physeq=TOX_scale_soil, ordination=TOX1_bray_soil, shape="Trt", color="Donor", title= "PCoA of TOX1 Soil Fungal Communitites: Bray") + geom_point(aes(color = Donor), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5) + scale_color_manual(values = colpalette2)+theme_bw()+scale_shape_manual(values=c(8, 19))
+
+TOX_scale_soil_control=subset_samples(TOX_scale_soil, Timepoint == "A") 
+TOX_scale_soil_0=subset_samples(TOX_scale_soil, Timepoint == "B") 
+TOX_scale_soil_1500=subset_samples(TOX_scale_soil, Timepoint == "G") 
+TOX_scale_soil_3000=subset_samples(TOX_scale_soil, Timepoint == "H") 
+TOX_scale_soil_4500=subset_samples(TOX_scale_soil, Timepoint == "I") 
+TOX_scale_soil_6000=subset_samples(TOX_scale_soil, Timepoint == "J") 
+
+TOX_scale_soil_pre=subset_samples(TOX_scale_soil_0_6000, Timepoint != "G")
+TOX_scale_soil_pre=subset_samples(TOX_scale_soil_pre, Timepoint != "H")
+TOX_scale_soil_pre=subset_samples(TOX_scale_soil_pre, Timepoint != "I")
+TOX_scale_soil_pre=subset_samples(TOX_scale_soil_pre, Timepoint != "J")
+TOX_scale_soil_pre=subset_samples(TOX_scale_soil_pre, Timepoint != "L")
+
+bray_pcoa_soil_control = ordinate(physeq = TOX_scale_soil_control, method = "PCoA", distance = "bray")
+bray_pcoa_soil_0 = ordinate(physeq = TOX_scale_soil_0, method = "PCoA", distance = "bray")
+bray_pcoa_soil_1500 = ordinate(physeq = TOX_scale_soil_1500, method = "PCoA", distance = "bray")
+bray_pcoa_soil_3000 = ordinate(physeq = TOX_scale_soil_3000, method = "PCoA", distance = "bray")
+bray_pcoa_soil_4500 = ordinate(physeq = TOX_scale_soil_4500, method = "PCoA", distance = "bray")
+bray_pcoa_soil_6000 = ordinate(physeq = TOX_scale_soil_6000, method = "PCoA", distance = "bray")
+bray_pcoa_soil_pre = ordinate(physeq = TOX_scale_soil_pre, method = "PCoA", distance = "bray")
+```
+
+#### Control soils
+
+```{r}
+plot_ordination(physeq=TOX_scale_soil_control, ordination=bray_pcoa_soil_control, color="Donor", title= "PCoA (bray) of TOX Soil Fungal Communitites: controls") + geom_point(aes(color = Donor), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5) + scale_color_manual(values = colpalette2)+theme_bw()+scale_shape_manual(values=c(8, 19))
+
+plot_ordination(physeq=TOX_scale_soil_control, ordination=bray_pcoa_soil_control, color="Season", title= "PCoA (bray) of TOX Soil Fungal Communitites: controls") + geom_point(aes(color = Season), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5)+theme_bw()
+```
+
+```{r, include=FALSE}
+trts.soil_controls= data.frame(sample_data(TOX_scale_soil_control))
+bray_soil_controls=distance(TOX_scale_soil_control, "bray")
+
+perm3=adonis(bray_soil_controls~Cancer, data=trts.soil_controls, permutations=1000, by="margin")
+perm5=adonis(bray_soil_controls~Season, data=trts.soil_controls, permutations=1000, by="margin")
+perm6=adonis(bray_soil_controls~Respiratory, data=trts.soil_controls, permutations=1000, by="margin")
+perm7=adonis(bray_soil_controls~Cardio, data=trts.soil_controls, permutations=1000, by="margin")
+perm8=adonis(bray_soil_controls~Neuro, data=trts.soil_controls, permutations=1000, by="margin")
+perm9=adonis(bray_soil_controls~Total_ADH, data=trts.soil_controls, permutations=1000, by="margin")
+perm10=adonis(bray_soil_controls~Sex, data=trts.soil_controls, permutations=1000, by="margin")
+perm11=adonis(bray_soil_controls~Age_cat, data=trts.soil_controls, permutations=1000, by="margin")
+perm12=adonis(bray_soil_controls~BMI_level, data=trts.soil_controls, permutations=1000, by="margin")
+
+```
+
+
+#### 0 ADH soils
+
+```{r}
+plot_ordination(physeq=TOX_scale_soil_0, ordination=bray_pcoa_soil_0, color="Donor", title= "PCoA (bray) of TOX Soil Fungal Communitites: 0 ADH") + geom_point(aes(color = Donor), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5) + scale_color_manual(values = colpalette2)+theme_bw()+scale_shape_manual(values=c(8, 19))
+
+plot_ordination(physeq=TOX_scale_soil_0, ordination=bray_pcoa_soil_0, color="Season", title= "PCoA (bray) of TOX Soil Fungal Communitites: 0 ADH") + geom_point(aes(color = Season), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5)+theme_bw()
+
+plot_ordination(physeq=TOX_scale_soil_0, ordination=bray_pcoa_soil_0, color="BMI_level", title= "PCoA (bray) of TOX Soil Fungal Communitites: 0 ADH") + geom_point(aes(color = BMI_level), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5)+theme_bw()
+```
+
+```{r, include=FALSE}
+trts.soil_0= data.frame(sample_data(TOX_scale_soil_0))
+bray_soil_0=distance(TOX_scale_soil_0, "bray")
+
+perm3=adonis(bray_soil_0~Cancer, data=trts.soil_0, permutations=1000, by="margin")
+perm5=adonis(bray_soil_0~Season, data=trts.soil_0, permutations=1000, by="margin")
+perm6=adonis(bray_soil_0~Respiratory, data=trts.soil_0, permutations=1000, by="margin")
+perm7=adonis(bray_soil_0~Cardio, data=trts.soil_0, permutations=1000, by="margin")
+perm8=adonis(bray_soil_0~Neuro, data=trts.soil_0, permutations=1000, by="margin")
+perm9=adonis(bray_soil_0~Total_ADH, data=trts.soil_0, permutations=1000, by="margin")
+perm10=adonis(bray_soil_0~Sex, data=trts.soil_0, permutations=1000, by="margin")
+perm11=adonis(bray_soil_0~Age_cat, data=trts.soil_0, permutations=1000, by="margin")
+perm12=adonis(bray_soil_0~BMI_level, data=trts.soil_0, permutations=1000, by="margin")
+
+```
+
+#### All pre-placement samples
+
+```{r}
+plot_ordination(physeq=TOX_scale_soil_pre, ordination=bray_pcoa_soil_pre, shape = "Timepoint", color="Donor", title= "PCoA (bray) of TOX Soil Fungal Communitites: Pre-placement") + geom_point(aes(color = Donor), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5) + scale_color_manual(values = colpalette2)+theme_bw()
+
+plot_ordination(physeq=TOX_scale_soil_pre, ordination=bray_pcoa_soil_pre, color="Season", title= "PCoA (bray) of TOX Soil Fungal Communitites: 0 ADH") + geom_point(aes(color = Season), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5)+theme_bw()
+```
+
+```{r, include=FALSE}
+trts.soil_pre= data.frame(sample_data(TOX_scale_soil_pre))
+bray_soil_pre=distance(TOX_scale_soil_pre, "bray")
+
+perm=adonis(bray_soil_pre~Trt, data=trts.soil_pre, permutations=1000, by="margin")
+
+```
+
+#### 1500 ADH soils
+
+```{r}
+plot_ordination(physeq=TOX_scale_soil_1500, ordination=bray_pcoa_soil_1500, color="Donor", title= "PCoA (bray) of TOX Soil Fungal Communitites: 1500 ADH") + geom_point(aes(color = Donor), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5) + scale_color_manual(values = colpalette2)+theme_bw()+scale_shape_manual(values=c(8, 19))
+
+plot_ordination(physeq=TOX_scale_soil_1500, ordination=bray_pcoa_soil_1500, color="Age_cat", title= "PCoA (bray) of TOX Soil Fungal Communitites: 1500 ADH") + geom_point(aes(color = Age_cat), stroke=1.5, alpha = 1.5, size=4)+theme_bw()
+
+plot_ordination(physeq=TOX_scale_soil_1500, ordination=bray_pcoa_soil_1500, color="BMI_level", title= "PCoA (bray) of TOX Soil Fungal Communitites: 1500 ADH") + geom_point(aes(color = BMI_level), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5) +theme_bw()
+
+plot_ordination(physeq=TOX_scale_soil_1500, ordination=bray_pcoa_soil_1500, color="Season", title= "PCoA (bray) of TOX Soil Fungal Communitites: 1500 ADH") + geom_point(aes(color = Season), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5) +theme_bw()
+```
+
+```{r, include=FALSE}
+trts.soil_1500= data.frame(sample_data(TOX_scale_soil_1500))
+bray_soil_1500=distance(TOX_scale_soil_1500, "bray")
+
+perm3=adonis(bray_soil_1500~Cancer, data=trts.soil_1500, permutations=1000, by="margin")
+perm5=adonis(bray_soil_1500~Season, data=trts.soil_1500, permutations=1000, by="margin")
+perm6=adonis(bray_soil_1500~Respiratory, data=trts.soil_1500, permutations=1000, by="margin")
+perm7=adonis(bray_soil_1500~Cardio, data=trts.soil_1500, permutations=1000, by="margin")
+perm8=adonis(bray_soil_1500~Neuro, data=trts.soil_1500, permutations=1000, by="margin")
+perm9=adonis(bray_soil_1500~Total_ADH, data=trts.soil_1500, permutations=1000, by="margin")
+perm10=adonis(bray_soil_1500~Sex, data=trts.soil_1500, permutations=1000, by="margin")
+perm11=adonis(bray_soil_1500~Age_cat, data=trts.soil_1500, permutations=1000, by="margin")
+perm12=adonis(bray_soil_1500~BMI_level, data=trts.soil_1500, permutations=1000, by="margin")
+
+```
+
+#### 3000 ADH soils
+
+```{r}
+plot_ordination(physeq=TOX_scale_soil_3000, ordination=bray_pcoa_soil_3000, color="Donor", title= "PCoA (bray) of TOX Soil Fungal Communitites: 3000 ADH") + geom_point(aes(color = Donor), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5) + scale_color_manual(values = colpalette2)+theme_bw()+scale_shape_manual(values=c(8, 19))
+
+plot_ordination(physeq=TOX_scale_soil_3000, ordination=bray_pcoa_soil_3000, color="Age", title= "PCoA (bray) of TOX Soil Fungal Communitites: 3000 ADH") + geom_point(aes(color = Age), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5) + scale_color_viridis()+theme_bw()
+
+plot_ordination(physeq=TOX_scale_soil_3000, ordination=bray_pcoa_soil_3000, shape = "BMI_level", color="BMI_level", title= "PCoA (bray) of TOX Soil Fungal Communitites: 3000 ADH") + geom_point(aes(color = BMI_level), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5)+theme_bw()
+
+plot_ordination(physeq=TOX_scale_soil_3000, ordination=bray_pcoa_soil_3000, color="Season", title= "PCoA (bray) of TOX Soil Fungal Communitites: 3000 ADH") + geom_point(aes(color = Season), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5)+theme_bw()
+
+plot_ordination(physeq=TOX_scale_soil_3000, ordination=bray_pcoa_soil_3000, shape = "Season", color="Sector", title= "PCoA (bray) of TOX Soil Fungal Communitites: 3000 ADH") + geom_point(aes(color = Sector), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5)+theme_bw()
+```
+
+```{r, include=FALSE}
+trts.soil_3000= data.frame(sample_data(TOX_scale_soil_3000))
+bray_soil_3000=distance(TOX_scale_soil_3000, "bray")
+
+perm3=adonis(bray_soil_3000~Cancer, data=trts.soil_3000, permutations=1000, by="margin")
+perm5=adonis(bray_soil_3000~Season, data=trts.soil_3000, permutations=1000, by="margin")
+perm6=adonis(bray_soil_3000~Respiratory, data=trts.soil_3000, permutations=1000, by="margin")
+perm7=adonis(bray_soil_3000~Cardio, data=trts.soil_3000, permutations=1000, by="margin")
+perm8=adonis(bray_soil_3000~Neuro, data=trts.soil_3000, permutations=1000, by="margin")
+perm9=adonis(bray_soil_3000~Total_ADH, data=trts.soil_3000, permutations=1000, by="margin")
+perm10=adonis(bray_soil_3000~Sex, data=trts.soil_3000, permutations=1000, by="margin")
+perm11=adonis(bray_soil_3000~Age_cat, data=trts.soil_3000, permutations=1000, by="margin")
+perm12=adonis(bray_soil_3000~BMI_level, data=trts.soil_3000, permutations=1000, by="margin")
+
+```
+
+#### 4500 ADH soils
+
+```{r}
+plot_ordination(physeq=TOX_scale_soil_4500, ordination=bray_pcoa_soil_4500, color="Donor", title= "PCoA (bray) of TOX Soil Fungal Communitites: 4500 ADH") + geom_point(aes(color = Donor), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5) + scale_color_manual(values = colpalette2)+theme_bw()+scale_shape_manual(values=c(8, 19))
+
+plot_ordination(physeq=TOX_scale_soil_4500, ordination=bray_pcoa_soil_4500, color="Age", title= "PCoA (bray) of TOX Soil Fungal Communitites: 4500 ADH") + geom_point(aes(color = Age), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5) + scale_color_viridis()+theme_bw()
+
+plot_ordination(physeq=TOX_scale_soil_4500, ordination=bray_pcoa_soil_4500, color="BMI_level", title= "PCoA (bray) of TOX Soil Fungal Communitites: 4500 ADH") + geom_point(aes(color = BMI_level), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5)+theme_bw()
+
+plot_ordination(physeq=TOX_scale_soil_4500, ordination=bray_pcoa_soil_4500, color="Season", title= "PCoA (bray) of TOX Soil Fungal Communitites: 4500 ADH") + geom_point(aes(color = Season), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5)+theme_bw()
+
+plot_ordination(physeq=TOX_scale_soil_4500, ordination=bray_pcoa_soil_4500, color="Sex", title= "PCoA (bray) of TOX Soil Fungal Communitites: 4500 ADH") + geom_point(aes(color = Sex), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5)+theme_bw()
+```
+
+```{r, include=FALSE}
+trts.soil_4500= data.frame(sample_data(TOX_scale_soil_4500))
+bray_soil_4500=distance(TOX_scale_soil_4500, "bray")
+
+perm3=adonis(bray_soil_4500~Cancer, data=trts.soil_4500, permutations=1000, by="margin")
+perm5=adonis(bray_soil_4500~Season, data=trts.soil_4500, permutations=1000, by="margin")
+perm6=adonis(bray_soil_4500~Respiratory, data=trts.soil_4500, permutations=1000, by="margin")
+perm7=adonis(bray_soil_4500~Cardio, data=trts.soil_4500, permutations=1000, by="margin")
+perm8=adonis(bray_soil_4500~Neuro, data=trts.soil_4500, permutations=1000, by="margin")
+perm9=adonis(bray_soil_4500~Total_ADH, data=trts.soil_4500, permutations=1000, by="margin")
+perm10=adonis(bray_soil_4500~Sex, data=trts.soil_4500, permutations=1000, by="margin")
+perm11=adonis(bray_soil_4500~Age_cat, data=trts.soil_4500, permutations=1000, by="margin")
+perm12=adonis(bray_soil_4500~BMI_level, data=trts.soil_4500, permutations=1000, by="margin")
+
+```
+
+#### 6000 ADH soils
+
+```{r}
+plot_ordination(physeq=TOX_scale_soil_6000, ordination=bray_pcoa_soil_6000, color="Donor", title= "PCoA (bray) of TOX Soil Fungal Communitites: 4500 ADH") + geom_point(aes(color = Donor), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5) + scale_color_manual(values = colpalette2)+theme_bw()+scale_shape_manual(values=c(8, 19))
+
+plot_ordination(physeq=TOX_scale_soil_6000, ordination=bray_pcoa_soil_6000, color="Age", title= "PCoA (bray) of TOX Soil Fungal Communitites: 6000 ADH") + geom_point(aes(color = Age), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5) + scale_color_viridis()+theme_bw()
+
+plot_ordination(physeq=TOX_scale_soil_6000, ordination=bray_pcoa_soil_6000, color="BMI", title= "PCoA (bray) of TOX Soil Fungal Communitites: 6000 ADH") + geom_point(aes(color = BMI), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5) + scale_color_viridis()+theme_bw()
+
+plot_ordination(physeq=TOX_scale_soil_6000, ordination=bray_pcoa_soil_6000, shape = "BMI_level", color="BMI_level", title= "PCoA (bray) of TOX Soil Fungal Communitites: 6000 ADH") + geom_point(aes(color = BMI_level), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5)+theme_bw()
+
+plot_ordination(physeq=TOX_scale_soil_6000, ordination=bray_pcoa_soil_6000, shape = "Season", color="Sector", title= "PCoA (bray) of TOX Soil Fungal Communitites: 6000 ADH") + geom_point(aes(color = Sector), stroke=1.5, alpha = 1.5, size=4)+geom_point(size=1.5)+theme_bw()
+```
+
+```{r, include=FALSE}
+trts.soil_6000= data.frame(sample_data(TOX_scale_soil_6000))
+bray_soil_6000=distance(TOX_scale_soil_6000, "bray")
+
+perm3=adonis(bray_soil_6000~Cancer, data=trts.soil_6000, permutations=1000, by="margin")
+perm5=adonis(bray_soil_6000~Season, data=trts.soil_6000, permutations=1000, by="margin")
+perm6=adonis(bray_soil_6000~Respiratory, data=trts.soil_6000, permutations=1000, by="margin")
+perm7=adonis(bray_soil_6000~Cardio, data=trts.soil_6000, permutations=1000, by="margin")
+perm8=adonis(bray_soil_6000~Neuro, data=trts.soil_6000, permutations=1000, by="margin")
+perm9=adonis(bray_soil_6000~Total_ADH, data=trts.soil_6000, permutations=1000, by="margin")
+perm10=adonis(bray_soil_6000~Sex, data=trts.soil_6000, permutations=1000, by="margin")
+perm11=adonis(bray_soil_6000~Age_cat, data=trts.soil_6000, permutations=1000, by="margin")
+perm12=adonis(bray_soil_6000~BMI_level, data=trts.soil_6000, permutations=1000, by="margin")
+
+```
+
+## CAP constrained ordination with Bray-Curtis distances
+
+```{r, include=FALSE}
+# Remove data points with missing metadata (this will include controls as I am using LRR values for soil parameters)
+#removes 21 samples (19 controls + 2 others with missing values)
+TOX_scale_soil_na = TOX_scale_soil %>%
+  subset_samples(
+    !is.na('Gravimetric Moisture') &
+      !is.na(pH_LRR) &
+      !is.na(EC_LRR) &
+      !is.na(BG_LRR) &
+      !is.na(NAG_LRR) &
+      !is.na(PHOS_LRR) &
+      !is.na(LAP_LRR)
+  )
+    
+TOX_soil_na_bray = distance(TOX_scale_soil_na, method = "bray")
+                            
+# CAP ordinate
+cap_soil_ord = ordinate(
+  physeq = TOX_scale_soil_na,
+  method = "CAP",
+  distance = TOX_soil_na_bray,
+  formula = ~ Gravimetric.Moisture + pH_LRR + EC_LRR + BG_LRR + NAG_LRR + PHOS_LRR + LAP_LRR
+)
+
+# CAP plot
+CAP_soil_plot = plot_ordination(
+  physeq = TOX_scale_soil_na,
+  ordination = cap_soil_ord,
+  color = "Per_ADH",
+  axes = c(1,2)
+) + geom_point(aes(colour=Per_ADH), size=5)+scale_color_viridis()+theme_bw()
+
+# Now add the environmental variables as arrows
+arrowmat <- vegan::scores(cap_soil_ord, display = "bp")
+
+# Add labels, make a data.frame
+arrowdf = data.frame(labels = rownames(arrowmat), arrowmat)
+
+# Define the arrow aesthetic mapping
+arrow_map <- aes(xend = CAP1, 
+    yend = CAP2, 
+    x = 0, 
+    y = 0, 
+    shape = NULL, 
+    color = NULL, 
+    label = labels)
+
+label_map <- aes(x = 1.3 * CAP1, 
+    y = 1.3 * CAP2, 
+    shape = NULL, 
+    color = NULL, 
+    label = labels)
+
+arrowhead = arrow(length = unit(0.02, "npc"))
+
+# Make a new graphic: ADH is color
+a=CAP_soil_plot + 
+  geom_segment(
+    mapping = arrow_map, 
+    size = .5, 
+    data = arrowdf, 
+    color = "gray", 
+    arrow = arrowhead
+  ) + 
+  geom_text(
+    mapping = label_map, 
+    size = 4,  
+    data = arrowdf, 
+    show.legend = FALSE
+  )
+
+#Make a new graphic: Season of placement is color
+s=plot_ordination(
+  physeq = TOX_scale_soil_na,
+  ordination = cap_soil_ord,
+  color = "Season",
+  axes = c(1,2)
+) + geom_point(aes(colour=Season), size=5)+theme_bw()+ 
+  geom_segment(
+    mapping = arrow_map, 
+    size = .5, 
+    data = arrowdf, 
+    color = "gray", 
+    arrow = arrowhead
+  ) + 
+  geom_text(
+    mapping = label_map, 
+    size = 4,  
+    data = arrowdf, 
+    show.legend = FALSE
+  )
+
+#Make a new graphic: Season of sample is color
+ss=plot_ordination(
+  physeq = TOX_scale_soil_na,
+  ordination = cap_soil_ord,
+  color = "Samp_Season",
+  axes = c(1,2)
+) + geom_point(aes(colour=Samp_Season), size=5)+theme_bw()+ 
+  geom_segment(
+    mapping = arrow_map, 
+    size = .5, 
+    data = arrowdf, 
+    color = "gray", 
+    arrow = arrowhead
+  ) + 
+  geom_text(
+    mapping = label_map, 
+    size = 4,  
+    data = arrowdf, 
+    show.legend = FALSE
+  )
+
+cap_anova=anova(cap_soil_ord)
+
+
+plot_ordination(
+  physeq = TOX_scale_soil_na,
+  ordination = cap_soil_ord,
+  color = "Per_ADH",
+  axes = c(1,2)
+) + geom_point(aes(colour=Per_ADH, size = BMI, shape=Donor))+theme_bw()+ 
+  geom_segment(
+    mapping = arrow_map, 
+    size = .5, 
+    data = arrowdf, 
+    color = "gray", 
+    arrow = arrowhead
+  ) + 
+  geom_text(
+    mapping = label_map, 
+    size = 4,  
+    data = arrowdf, 
+    show.legend = FALSE
+  )+scale_shape_manual(values=c(0:20))+scale_color_viridis()
+```
+
+```{r,echo=FALSE}
+a
+
+s
+```
+
+ANOVA of CAP ordination:
+```{r, echo=FALSE}
+kable(cap_anova, digits = 3)
+```
+
+
+## CAP with percent ADH and temperature
+
+```{r, include=FALSE}
+# Remove data points with missing metadata (this will include controls as I am using LRR value)
+#removes 22 samples (19 controls + 3 others with missing values)
+TOX_scale_soil_na = TOX_scale_soil %>%
+  subset_samples(
+    !is.na('Gravimetric Moisture') &
+      !is.na(pH_LRR) &
+      !is.na(EC_LRR) &
+      !is.na(BG_LRR) &
+      !is.na(NAG_LRR) &
+      !is.na(PHOS_LRR) &
+      !is.na(LAP_LRR) &
+      !is.na(Temperature) &
+      !is.na(Per_ADH)
+  )
+    
+TOX_soil_na_bray = distance(TOX_scale_soil_na, method = "bray")
+                            
+# CAP ordinate
+cap_soil_ord = ordinate(
+  physeq = TOX_scale_soil_na,
+  method = "CAP",
+  distance = TOX_soil_na_bray,
+  formula = ~ Gravimetric.Moisture + pH_LRR + EC_LRR + BG_LRR + NAG_LRR + PHOS_LRR + LAP_LRR + Temperature + Per_ADH
+)
+
+# CAP plot
+CAP_soil_plot = plot_ordination(
+  physeq = TOX_scale_soil_na,
+  ordination = cap_soil_ord,
+  color = "Per_ADH",
+  axes = c(1,2)
+) + geom_point(aes(colour=Per_ADH), size=5)+scale_color_viridis()+theme_bw()
+
+# Now add the environmental variables as arrows
+arrowmat <- vegan::scores(cap_soil_ord, display = "bp")
+
+# Add labels, make a data.frame
+arrowdf = data.frame(labels = rownames(arrowmat), arrowmat)
+
+# Define the arrow aesthetic mapping
+arrow_map <- aes(xend = CAP1, 
+    yend = CAP2, 
+    x = 0, 
+    y = 0, 
+    shape = NULL, 
+    color = NULL, 
+    label = labels)
+
+label_map <- aes(x = 1.3 * CAP1, 
+    y = 1.3 * CAP2, 
+    shape = NULL, 
+    color = NULL, 
+    label = labels)
+
+arrowhead = arrow(length = unit(0.02, "npc"))
+
+# Make a new graphic: ADH is color
+a=CAP_soil_plot + 
+  geom_segment(
+    mapping = arrow_map, 
+    size = .5, 
+    data = arrowdf, 
+    color = "gray", 
+    arrow = arrowhead
+  ) + 
+  geom_text(
+    mapping = label_map, 
+    size = 4,  
+    data = arrowdf, 
+    show.legend = FALSE
+  )
+
+#Make a new graphic: Season of placement is color
+s=plot_ordination(
+  physeq = TOX_scale_soil_na,
+  ordination = cap_soil_ord,
+  color = "Season",
+  axes = c(1,2)
+) + geom_point(aes(colour=Season), size=5)+theme_bw()+ 
+  geom_segment(
+    mapping = arrow_map, 
+    size = .5, 
+    data = arrowdf, 
+    color = "gray", 
+    arrow = arrowhead
+  ) + 
+  geom_text(
+    mapping = label_map, 
+    size = 4,  
+    data = arrowdf, 
+    show.legend = FALSE
+  )
+
+#Make a new graphic: Season of sample is color
+ss=plot_ordination(
+  physeq = TOX_scale_soil_na,
+  ordination = cap_soil_ord,
+  color = "Samp_Season",
+  axes = c(1,2)
+) + geom_point(aes(colour=Samp_Season), size=5)+theme_bw()+ 
+  geom_segment(
+    mapping = arrow_map, 
+    size = .5, 
+    data = arrowdf, 
+    color = "gray", 
+    arrow = arrowhead
+  ) + 
+  geom_text(
+    mapping = label_map, 
+    size = 4,  
+    data = arrowdf, 
+    show.legend = FALSE
+  )
+
+cap_anova=anova(cap_soil_ord)
+
+
+plot_ordination(
+  physeq = TOX_scale_soil_na,
+  ordination = cap_soil_ord,
+  color = "Per_ADH",
+  axes = c(1,2)
+) + geom_point(aes(colour=Per_ADH, size = BMI, shape=Donor))+theme_bw()+ 
+  geom_segment(
+    mapping = arrow_map, 
+    size = .5, 
+    data = arrowdf, 
+    color = "gray", 
+    arrow = arrowhead
+  ) + 
+  geom_text(
+    mapping = label_map, 
+    size = 4,  
+    data = arrowdf, 
+    show.legend = FALSE
+  )+scale_shape_manual(values=c(0:20))+scale_color_viridis()
+```
+
+ANOVA of CAP ordination:
+```{r, echo=FALSE}
+kable(cap_anova, digits = 3)
+```
+
+## Saccharomycetes
+
+```{r, include=FALSE}
+TOX_abund = TOX %>% transform_sample_counts(function(x) {x/sum(x)} )
+test = subset_taxa(TOX_abund, Class == "c__Saccharomycetes") #128 taxa make up the class saccharomycetes in our samples
+test = subset_taxa(TOX_abund, Genus == "g__Yarrowia") #There are 14 taxa that make up the genus Yarrowia in our dataset
+
+Class=TOX %>%
+  tax_glom(taxrank="Class") %>%
+  transform_sample_counts(function(x) {x/sum(x)} ) #relative abundance: Class; #81 taxa make up this class in our samples
+
+Sacch = subset_taxa(Class, Class == "c__Saccharomycetes")
+Sacch_abund = as(otu_table(Sacch), "matrix")
+if(taxa_are_rows(Sacch)){Sacch_abund=t(Sacch_abund)}
+Sacch_abund_df=as.data.frame(Sacch_abund)
+colnames(Sacch_abund_df)[1]="Saccharomycetes" 
+Sacch_abund_df$group=row.names(Sacch_abund_df)
+
+S = subset_taxa(TOX_abund, Class == "c__Saccharomycetes")
+s = S %>%
+  tax_glom(taxrank="Genus") %>%
+  psmelt() %>%
+  arrange(Genus)
+
+colpalette2= c("khaki3","steelblue3","orange","chocolate","aquamarine4","plum3","black","mediumpurple4","violetred3","brown4","chartreuse3","lavenderblush4","lightpink","mediumpurple3","lightcyan1","palegreen4","red1","wheat4","papayawhip","tomato3")
+nb.cols=50
+expanded_cols=colorRampPalette(colpalette2)(nb.cols)
+
+#Saccharomyctes genus abundance faceted by donor
+ggplot(s, aes(x = group, y = Abundance, fill = Genus)) + geom_bar(stat = "identity") + scale_fill_manual(values = expanded_cols) + theme(axis.text.x = element_text(angle = 60, hjust = 1, size=6)) + theme(legend.position="bottom", legend.text = element_text(size=8), legend.key.height= unit(.25, 'cm')) +guides(fill=guide_legend(ncol=7)) + facet_wrap(~Donor, scales="free", nrow=4)+xlab("Sample")+ylab("Relative Abundance") 
+
+ggplot(subset(s,Donor %in% c("TOX001")), aes(x = group, y = Abundance, fill = Genus)) + geom_bar(stat = "identity") + scale_fill_manual(values = expanded_cols) + theme(axis.text.x = element_text(angle = 60, hjust = 1, size=6)) + theme(legend.text = element_text(size=8)) +guides(fill=guide_legend(ncol=2)) +xlab("Sample")+ylab("Relative Abundance") 
+
+
+
+#filtering from the abundance dataframe ends in the same result
+#TestSacch = subset_taxa(TOX_abund, Class == "c__Saccharomycetes")
+#TestSacch_abund = as(otu_table(TestSacch), "matrix")
+#if(taxa_are_rows(TestSacch)){TestSacch_abund=t(TestSacch_abund)}
+#TestSacch_abund_df=as.data.frame(TestSacch_abund)
+#Sacch_all = TestSacch_abund_df %>%
+ # mutate(Saccharomycetes_All = rowSums(.))
+
+#Sacch_all$group=row.names(TestSacch_abund_df)
+
+
+Genus=TOX %>%
+  tax_glom(taxrank="Genus") %>%
+  transform_sample_counts(function(x) {x/sum(x)} ) #relative abundance: Class; #1242 taxa make up this class in our samples
+
+Yarrowia = subset_taxa(Genus, Genus == "g__Yarrowia")
+Yarrowia_abund = as(otu_table(Yarrowia), "matrix")
+if(taxa_are_rows(Yarrowia)){Yarrowia_abund=t(Yarrowia_abund)}
+Yarrowia_abund_df=as.data.frame(Yarrowia_abund)
+colnames(Yarrowia_abund_df)[1]="Yarrowia" 
+Yarrowia_abund_df$group=row.names(Yarrowia_abund_df)
+
+test =  metadata %>%
+  left_join(Sacch_abund_df, by="group") 
+test$Donor=as.factor(test$Donor)
+test$group=ordered(test$group, levels=levels)
+
+ggplot(test, aes(x = group, y = Saccharomycetes)) + geom_bar(stat = "identity") + theme(axis.text.x = element_text(angle = 60, hjust = 1, size=6)) + facet_wrap(~Donor, scales="free", nrow=4)+xlab("Sample")+ylab("Relative Abundance") #calculating Saccharomycetes abundance from the main file (TOX_abund) is the same as using 'tax_glom" at the class level and then calculating abundance and extracting just Saccharomycetes. These value represent the relative abundance of Saccharomycetes relative to the whole sample.
+
+#ggplot(test, aes(group, Saccharomycetes_All)) + geom_bar(stat = "identity") + theme(axis.text.x = element_text(angle = 60, hjust = 1, size =6))+facet_wrap(~Donor, scales = "free")
+
+TOX_ITSabund = metadata %>%
+  left_join(Sacch_abund_df, by="group") %>%
+  left_join(Yarrowia_abund_df, by = "group")
+TOX_ITSabund$Donor=as.factor(TOX_ITSabund$Donor)
+
+ggplot(TOX_ITSabund, aes(x = ADH, y = Saccharomycetes)) + geom_line(stat = "identity") + theme(axis.text.x = element_text(angle = 60, hjust = 1, size=6)) + facet_wrap(~Donor, scales="free_x", nrow=4)+xlab("Sample")+ylab("Relative Abundance") 
+
+TOX_ITSabund_soil= TOX_ITSabund %>%
+  filter(Sample_Type == "soil")
+
+TOX_ITSabund_fluid = TOX_ITSabund %>%
+  filter(Sample_Type=="fluid")
+
+sacch_max = TOX_ITSabund_soil %>%
+  group_by(Donor) %>%
+  summarise(max_sacch = max(Saccharomycetes))
+
+max_sacch = TOX_ITSabund_soil %>% inner_join(sacch_max) %>% filter(Saccharomycetes == max_sacch) %>% select("group", "Donor", "ADH", "Total_ADH", "Season", "Sex", "BMI", "Diabetes", "Cancer", "Cardio", "Respiratory", "Pneumonia", "max_sacch")
+
+sacch_con = TOX_ITSabund_soil %>%
+  group_by(Donor) %>%
+  filter(Trt == "control") %>%
+  select("Donor", "Saccharomycetes", "BMI_level")
+
+sacch_delta = sacch_con %>%
+  left_join(sacch_max, by = "Donor") %>%
+  mutate(sacch_delta = max_sacch - Saccharomycetes)
+
+sacch_delta_BMIcat = sacch_delta %>% group_by(BMI_level)%>%
+  summarise(avg_sacch_delta_bmicat = mean(sacch_delta))
+
+yarrowia_max = TOX_ITSabund_soil %>%
+  group_by(Donor)%>%
+  summarise(max_yarrowia = max(Yarrowia))
+
+TOX_ITSabund_single = treatments %>%
+  filter(Per_ADH == "1")
+  
+TOX_ITSabund_single = TOX_ITSabund_single %>% 
+  left_join(sacch_max, by="Donor") %>%
+  left_join(yarrowia_max, by="Donor")
+
+```
+
+```{r, include=FALSE}
+Sacch_con = TOX_ITSabund_soil %>%
+  filter(Trt == "control") %>%
+  select(Donor, Saccharomycetes)
+colnames(Sacch_con)[2]="Sacch_con"
+sacch_max_norm = max_sacch %>%
+  left_join(Sacch_con, by="Donor") %>%
+  mutate(Saccharomycetes_norm = max_sacch - Sacch_con) %>%
+  select(Donor, Saccharomycetes_norm)
+
+TOX_ITSabund_single = TOX_ITSabund_single %>%
+  left_join(sacch_max_norm, by = "Donor")
+
+sacch_norm = TOX_ITSabund_soil %>%
+  left_join(Sacch_con, by="Donor")%>%
+  mutate(Saccharomycetes_norm = Saccharomycetes - Sacch_con) %>%
+  select(group, Saccharomycetes_norm)
+TOX_ITSabund_soil = TOX_ITSabund_soil%>%
+  left_join(sacch_norm, by = "group")
+
+ggplot(TOX_ITSabund_soil, aes(x = ADH, y = Saccharomycetes_norm)) + geom_line(stat = "identity") + theme(axis.text.x = element_text(angle = 60, hjust = 1, size=6)) + facet_wrap(~Donor, scales="free_x", nrow=4)+xlab("Sample")+ylab("Relative Abundance") 
+
+TOX_ITSabund_soil_5000 = TOX_ITSabund_soil %>% filter(ADH <= 5000)
+TOX_ITSabund_soil_5000$Saccharomycetes_norm2 = TOX_ITSabund_soil_5000$Saccharomycetes_norm
+TOX_ITSabund_soil_5000$Saccharomycetes_norm2[TOX_ITSabund_soil_5000$Saccharomycetes_norm2<0] = 0 #norm 2 is the saccharomycetes relative abundance with background removed and values less than 0 altered to be 0 so no negative values are present
+
+
+ggplot(TOX_ITSabund_soil_5000, aes(x = ADH, y = Saccharomycetes_norm2)) + geom_line(stat = "identity") + theme(axis.text.x = element_text(angle = 60, hjust = 1, size=6)) + facet_wrap(~Donor, scales="free_x", nrow=4)+xlab("Sample")+ylab("Relative Abundance")
+
+ggplot(TOX_ITSabund_soil_5000, aes(x = pH, y = Saccharomycetes_norm2)) + geom_line(stat = "identity") + theme(axis.text.x = element_text(angle = 60, hjust = 1, size=6)) + facet_wrap(~Donor, scales="free_x", nrow=4)+xlab("Sample")+ylab("Relative Abundance")
+```
+
+
+```{r, include=FALSE}
+Sacch_yar = TOX_ITSabund %>%
+  select(group, Donor, Trt, ADH, Per_ADH, Season, BMI, Saccharomycetes, Yarrowia)
+sacch_yar_long = melt(Sacch_yar, id=c("group", "Donor", "Trt", "ADH", "Per_ADH", "Season","BMI"))
+sacch_yar_long_donor = sacch_yar_long %>% filter(Donor != "NA") %>% filter(Trt == "donor")
+sacch_yar_long_controls = sacch_yar_long %>% filter(Donor != "NA") %>% filter(Trt == "control")
+
+c=ggplot(sacch_yar_long_donor, aes(ADH, value, color=Donor))+geom_line(stat="identity", size=1)+facet_wrap(~variable)+scale_color_manual(values=colpalette2)+ theme(legend.position="bottom") +guides(fill=guide_legend(ncol=3))
+
+c=c + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+d=ggplot(sacch_yar_long_donor, aes(Per_ADH, value, color=Donor))+geom_line(stat="identity", size=1)+facet_wrap(~variable)+scale_color_manual(values=colpalette2)+ theme(legend.position="bottom") +guides(fill=guide_legend(ncol=3))
+
+d=d+ theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+e=ggplot(sacch_yar_long_donor, aes(ADH, value, group=Donor, color=BMI))+geom_line(stat="identity", size=1)+facet_wrap(~variable)+ theme(legend.position="bottom") +guides(fill=guide_legend(ncol=3))
+
+e=e+ theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+f=ggplot(sacch_yar_long_donor, aes(Per_ADH, value, group=Donor, color=BMI))+geom_line(stat="identity", size=1)+facet_wrap(~variable)+ theme(legend.position="bottom") +guides(fill=guide_legend(ncol=3))
+
+f=f+ theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+g=ggplot(TOX_ITSabund_single, aes(x=Donor, y=max_sacch, fill=BMI))+geom_bar(stat = "identity")
+
+h=ggplot(TOX_ITSabund_single, aes(x=Donor, y=max_yarrowia, fill=BMI))+geom_bar(stat = "identity")
+
+```
+
+Saccharomycetes and Yarrowia abundances by donor and ADH:
+
+```{r, echo=FALSE}
+c
+```
+
+Saccharomycetes and Yarrowia abundances by donor and percent ADH:
+
+```{r, echo=FALSE}
+d
+```
+
+
+Saccharomycetes and Yarrowia abundances by donor and ADH, colored by BMI:
+
+```{r, echo=FALSE}
+e
+```
+
+
+```{r, include=FALSE}
+#Test: does soil saccharomycetes relative abundance vary due to differnces in donor BMI?
+
+TOX_ITSabund_soil_5000$BMI_level = factor(TOX_ITSabund_soil_5000$BMI_level, ordered = FALSE)
+TOX_ITSabund_soil_donor_5000 = TOX_ITSabund_soil_5000 %>% filter(Trt == "donor")
+
+
+#raw values
+sacch_int =  lmer(Saccharomycetes ~ ADH*BMI_level + ADH*Season + (1|Donor), data=TOX_ITSabund_soil_donor_5000) #random intercepts
+
+sacch_slope =  lmer(Saccharomycetes ~ ADH*BMI_level + ADH*Season+ (0+ADH|Donor), data=TOX_ITSabund_soil_donor_5000) #random slopes 
+
+sacch_ints =  lmer(Saccharomycetes ~ ADH*BMI_level+ADH*Season + (1+ADH|Donor), data=TOX_ITSabund_soil_donor_5000) #random slopes and int
+anova(sacch_int, sacch_slope) #-66 vs -65
+anova(sacch_slope, sacch_ints) #-65 vs -61 
+#use random int
+
+f =  lmer(Saccharomycetes ~ ADH*BMI_level*Season+(0+ADH|Donor),data=TOX_ITSabund_soil_donor_5000)
+
+#norm values
+sacch_int =  lmer(Saccharomycetes_norm ~ ADH*BMI_level + ADH*Season + (1|Donor), data=TOX_ITSabund_soil_donor_5000) #random intercepts
+
+sacch_slope =  lmer(Saccharomycetes_norm ~ ADH*BMI_level + ADH*Season+ (0+ADH|Donor), data=TOX_ITSabund_soil_donor_5000) #random slopes 
+
+#sacch_bmi = lmer(Saccharomycetes_norm ~ ADH*BMI_level+(1+ADH|Donor), data=TOX_ITSabund_soil_donor_5000)
+
+
+d =  lmer(Saccharomycetes_norm2 ~ ADH*BMI*Season+(0+ADH|Donor), data=TOX_ITSabund_soil_donor_5000) #random slopes 
+
+e =  lmer(Saccharomycetes_norm2 ~ ADH*BMI_level*Season+(0+ADH|Donor),data=TOX_ITSabund_soil_donor_5000)
+
+sacch_ints =  lmer(Saccharomycetes_norm ~ ADH*BMI_level+ADH*Season+(1+ADH|Donor),data=TOX_ITSabund_soil_donor_5000) #random slopes and int
+
+anova(sacch_int, sacch_slope) #-57 vs -77
+anova(sacch_slope, sacch_ints) #-77 vs -73 
+#use random slope
+anova(sacch_slope, d) #BMI as numeric provides better fit...
+anova(d,e) #basically the same; d is 1 AIC better
+anvoa(sacch_ints, d)
+
+summary(d)
+sacch_aov = anova(d)
+anova(e)
+
+```
+
+LMER: Saccharomycetes_norm ~ ADH * BMI * Season+(0+ADH|Donor)
+```{r, echo=FALSE}
+kable(sacch_aov, digits = 3)
+```
+
+```{r, echo=FALSE}
+#plot relative abundance ~ ADH and BMI category 
+ggplot(TOX_ITSabund_soil_5000, aes(x=ADH, y=Saccharomycetes_norm, group=BMI_level, color=BMI_level))+geom_point(size=3)+geom_smooth(method="lm")+theme_bw()
+
+ggplot(TOX_ITSabund_soil_5000, aes(x=ADH, y=Saccharomycetes_norm2, group=BMI_level, color=BMI_level))+geom_point(size=3)+geom_smooth(method="lm")+theme_bw()
+
+#plot relative abundance ~ ADH and season of placement
+ggplot(TOX_ITSabund_soil_5000, aes(x=ADH, y=Saccharomycetes_norm, group=Season, color=Season))+geom_point(size=3)+geom_smooth(method="lm")+theme_bw()
+```
+
+```{r, include=FALSE}
+#norm 2 is the saccharomycetes relative abundance with background removed and values less than 0 altered to be 0 so no negative values are present
+a = lmer(Saccharomycetes_norm2 ~ ADH*Sex+(0+ADH|Donor),data=TOX_ITSabund_soil_donor_5000)
+a_aov=anova(a)
+
+b = lmer(Saccharomycetes_norm2 ~ ADH*Age+(0+ADH|Donor),data=TOX_ITSabund_soil_donor_5000)
+b_aov=anova(b)
+
+c = lmer(Saccharomycetes_norm2 ~ ADH*num_drugs+(0+ADH|Donor),data=TOX_ITSabund_soil_donor_5000)
+c_aov=anova(c)
+
+d = lmer(Saccharomycetes_norm2 ~ ADH*Cancer+(0+ADH|Donor),data=TOX_ITSabund_soil_donor_5000)
+d_aov=anova(d)
+
+e = lmer(Saccharomycetes_norm2 ~ ADH*Diabetes+(0+ADH|Donor),data=TOX_ITSabund_soil_donor_5000)
+e_aov=anova(e)
+
+f = lmer(Saccharomycetes_norm2 ~ ADH*Respiratory+(0+ADH|Donor),data=TOX_ITSabund_soil_donor_5000)
+f_aov=anova(f)
+
+g = lmer(Saccharomycetes_norm2 ~ ADH*Cardio+(0+ADH|Donor),data=TOX_ITSabund_soil_donor_5000)
+g_aov=anova(g)
+
+h = lmer(Saccharomycetes_norm2 ~ ADH*Neuro+(0+ADH|Donor),data=TOX_ITSabund_soil_donor_5000)
+h_aov=anova(h)
+
+i = lmer(Saccharomycetes_norm2 ~ ADH*Pneumonia+(0+ADH|Donor),data=TOX_ITSabund_soil_donor_5000)
+i_aov=anova(i)
+```
+
+LMER: Saccharomycetes norm ~ ADH * Sex+(0+ADH|Donor)
+```{r, echo = FALSE}
+kable(a_aov, digits = 3)
+```
+
+LMER: Saccharomycetes norm ~ ADH*Age+(0+ADH|Donor)
+```{r, echo = FALSE}
+kable(b_aov, digits = 3)
+```
+
+LMER: Saccharomycetes norm ~ ADH*num_drugs+(0+ADH|Donor)
+```{r, echo = FALSE}
+kable(c_aov, digits = 3)
+```
+
+LMER: Saccharomycetes norm ~ ADH*Cancer+(0+ADH|Donor)
+```{r, echo = FALSE}
+kable(d_aov, digits = 3)
+```
+
+LMER: Saccharomycetes norm ~ ADH*Diabetes+(0+ADH|Donor)
+```{r, echo = FALSE}
+kable(e_aov, digits = 3)
+```
+
+LMER: Saccharomycetes norm ~ ADH*Respiratory+(0+ADH|Donor)
+```{r, echo = FALSE}
+kable(f_aov, digits = 3)
+```
+
+LMER: Saccharomycetes norm ~ ADH*Cardio+(0+ADH|Donor)
+```{r, echo = FALSE}
+kable(g_aov, digits = 3)
+```
+
+LMER: Saccharomycetes norm ~ ADH*Neuro+(0+ADH|Donor)
+```{r, echo = FALSE}
+kable(h_aov, digits = 3)
+```
+
+LMER: Saccharomycetes norm ~ ADH*Pneumonia+(0+ADH|Donor)
+```{r, echo = FALSE}
+kable(i_aov, digits = 3)
+```
+
+```{r inlcude = FALSE}
+#is variation in saccharomycetes abudance related to changes in soil parameters?
+
+ph = lmer(Saccharomycetes_norm2 ~ ADH*pH+(1|Donor),data=TOX_ITSabund_soil_donor_5000)
+ph_aov=anova(ph)
+summary(ph)
+ggplot(TOX_ITSabund_soil_donor_5000, aes(pH, Saccharomycetes_norm2))+geom_point()+geom_smooth(method="lm")+theme_bw()
+rsq::rsq(ph) #rsq mod = 0.608; fixed = 0.389
+#saccharomycetes abundance decreased with increasing pH
+
+TOX_ITSabund_soil_donor_5000 = TOX_ITSabund_soil_donor_5000 %>% mutate(ph2 = pH^2)
+ggplot(TOX_ITSabund_soil_donor_5000, aes(ph2, Saccharomycetes_norm2))+geom_point()+geom_smooth(method="loess")+theme_bw()
+ph2 = lmer(Saccharomycetes_norm2 ~ ADH*pH*ph2+(1|Donor),data=TOX_ITSabund_soil_donor_5000)
+summary(ph2)
+anova(ph2)
+
+
+
+EC  = lmer(Saccharomycetes_norm2 ~ADH*EC+(1|Donor),data=TOX_ITSabund_soil_donor_5000)
+EC_aov = anova(EC)
+summary(EC) 
+ggplot(TOX_ITSabund_soil_donor_5000, aes(EC, Saccharomycetes_norm2))+geom_point()+geom_smooth(method="lm")+facet_wrap(~Donor)+theme_bw()
+
+resp = lmer(Saccharomycetes_norm2 ~ ADH*Evolved_CO2+(1|Donor),data=TOX_ITSabund_soil_donor_5000)
+resp_aov= anova(resp)
+summary(resp)
+ggplot(TOX_ITSabund_soil_donor_5000, aes(x=Evolved_CO2, y=Saccharomycetes_norm2)) + geom_point() + geom_smooth(method="lm") #resp increase, sacch increase
+
+bg = lmer(Saccharomycetes_norm2 ~ ADH*BG_avg+(1|Donor),data=TOX_ITSabund_soil_donor_5000)
+bg_aov= anova(bg)
+summary(bg)
+
+nag = lmer(Saccharomycetes_norm2 ~ ADH*NAG_avg+(1|Donor),data=TOX_ITSabund_soil_donor_5000)
+nag_aov= anova(nag)
+summary(nag)
+ggplot(TOX_ITSabund_soil_donor_5000, aes(x=NAG_avg, y=Saccharomycetes_norm2)) + geom_point() + geom_smooth(method="lm") #NAG increase, sacch increase
+
+phos = lmer(Saccharomycetes_norm2 ~ ADH*PHOS_avg+(1|Donor),data=TOX_ITSabund_soil_donor_5000)
+phos_aov= anova(phos)
+summary(phos)
+ggplot(TOX_ITSabund_soil_donor_5000, aes(x=PHOS_avg, y=Saccharomycetes_norm2)) + geom_point() + geom_smooth(method="lm") #PHOS increase, sacch increase
+ggplot(TOX_ITSabund_soil_donor_5000, aes(x=PHOS_LRR, y=Saccharomycetes_norm2)) + geom_point() + geom_smooth(method="lm")
+
+
+lap = lmer(Saccharomycetes_norm2 ~ ADH*LAP_avg+(1|Donor),data=TOX_ITSabund_soil_donor_5000)
+lap_aov= anova(lap)
+summary(lap)
+ggplot(TOX_ITSabund_soil_donor_5000, aes(x=LAP_avg, y=Saccharomycetes_norm2)) + geom_point() + geom_smooth(method="lm") #LAP increase, sacch decrease
+
+colnames(TOX_ITSabund_soil_donor_5000)[31] = "moisture"
+g = lmer(Saccharomycetes_norm2 ~ ADH*moisture+(1|Donor),data=TOX_ITSabund_soil_donor_5000)
+g_aov= anova(g)
+summary(g)
+```
+
+
+#### Maximum Saccharomycetes abundance
+
+```{r, include=FALSE}
+mod5= lm(max_sacch~BMI*Season, data=TOX_ITSabund_single)
+aov5=anova(mod5)
+msBMI=aov5[1,5]
+```
+
+```{r, echo=FALSE}
+g
+```
+
+LM:max_sacch~BMI+Season
+```{r, echo=FALSE}
+kable(aov5, digits = 3)
+```
+
+### Saccharomycetes in decomposition fluid:
+
+```{r, include=FALSE}
+data=TOX_ITSabund_fluid %>%
+  select(Donor, Season, BMI, Saccharomycetes, Yarrowia)
+data_long=melt(data, id=c("Donor","Season","BMI"))
+i = ggplot(data_long, aes(Donor, value, fill=BMI))+geom_bar(stat = "identity")+facet_wrap(~variable)+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+mod7= lm(Saccharomycetes~BMI*Season*Sex, data=TOX_ITSabund_fluid)
+aov7=anova(mod7)
+fsBMI=aov7[1,5]
+```
+
+```{r, echo=FALSE}
+i
+```
+
+LM:Saccharomycetes~BMI+Season
+```{r, echo=FALSE}
+kable(aov7, digits=3)
+```
+
+Neither BMI nor season were found to significantly alter the abundance of Saccharomycetes or Yarrowia in decomposition fluid. However since DNA samples were pooled, it is possible that changes over time may be masking any true effects. 
+
+### Yarrowia
+
+#### Maximun Yarrowia abundance
+
+```{r, include=FALSE}
+mod6= lm(max_yarrowia~BMI*Season*Sex*Age, data=TOX_ITSabund_single)
+aov6=anova(mod6)
+myBMI=aov6[1,5]
+```
+
+
+LM:max_yarrowia~BMI+Season
+```{r, echo=FALSE}
+kable(aov6, digits = 3)
+```
+
+#### Yarrowia in decomposition fluid
+
+```{r, include = FALSE}
+mod8=lm(Yarrowia~BMI+Season, data=TOX_ITSabund_fluid)
+aov8=anova(mod8)
+fyBMI=aov7[1,5]
+```
+
+LM:Yarrowia~BMI+Season
+```{r, echo=FALSE}
+kable(aov8, digits=3)
+```
+
