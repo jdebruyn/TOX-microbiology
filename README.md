@@ -1,6 +1,6 @@
 # TOX-microbiology
 
-This project contains metadata associated with a field study conducted between February 2018 - August 2021, in which we begin to address questions about inter-individual variation in vertebrate decomposition attributed to intrinsic factors, that is, properties of the carcass or cadaver itself. Additionally, this project contains code that is associated with the publication: Mason et al. (2022). Body Mass Index (BMI) impacts soil chemical and microbial response to human.
+This repository constians files and code associated with the publication: Mason et al. (2022). Body Mass Index (BMI) impacts soil chemical and microbial response to human.
 
 This folder contains the following items:
 
