@@ -1,6 +1,6 @@
 # TOX-microbiology
 
-This repository constians files and code associated with the publication: Mason et al. (2022). Body Mass Index (BMI) impacts soil chemical and microbial response to human.
+This repository contains files and code associated with the publication: Mason et al. (2022). Body Mass Index (BMI) impacts soil chemical and microbial response to human.
 
 This folder contains the following items:
 
