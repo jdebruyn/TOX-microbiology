@@ -1,0 +1,1249 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+%
+
+
+\PassOptionsToPackage{table}{xcolor}
+
+\documentclass[
+  10pt,
+  letterpaper,
+]{article}
+
+\usepackage{amsmath,amssymb}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math}
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else  
+    % xetex/luatex font selection
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{xcolor}
+\usepackage[top=0.85in,left=2.75in,footskip=0.75in]{geometry}
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+
+
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}\usepackage{longtable,booktabs,array}
+\usepackage{calc} % for calculating minipage widths
+% Correct order of tables after \paragraph or \subparagraph
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd\longtable{\par}{\if@noskipsec\mbox{}\fi\par}{}{}
+\makeatother
+% Allow footnotes in longtable head/foot
+\IfFileExists{footnotehyper.sty}{\usepackage{footnotehyper}}{\usepackage{footnote}}
+\makesavenoteenv{longtable}
+\usepackage{graphicx}
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+% Scale images if necessary, so that they will not overflow the page
+% margins by default, and it is still possible to overwrite the defaults
+% using explicit options in \includegraphics[width, height, ...]{}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+% Set default figure placement to htbp
+\makeatletter
+\def\fps@figure{htbp}
+\makeatother
+
+% Use adjustwidth environment to exceed column width (see example table in text)
+\usepackage{changepage}
+
+% marvosym package for additional characters
+\usepackage{marvosym}
+
+% cite package, to clean up citations in the main text. Do not remove.
+% Using natbib instead
+% \usepackage{cite}
+
+% Use nameref to cite supporting information files (see Supporting Information section for more info)
+\usepackage{nameref,hyperref}
+
+% line numbers
+\usepackage[right]{lineno}
+
+% ligatures disabled
+\usepackage{microtype}
+\DisableLigatures[f]{encoding = *, family = * }
+
+% create "+" rule type for thick vertical lines
+\newcolumntype{+}{!{\vrule width 2pt}}
+
+% create \thickcline for thick horizontal lines of variable length
+\newlength\savedwidth
+\newcommand\thickcline[1]{%
+  \noalign{\global\savedwidth\arrayrulewidth\global\arrayrulewidth 2pt}%
+  \cline{#1}%
+  \noalign{\vskip\arrayrulewidth}%
+  \noalign{\global\arrayrulewidth\savedwidth}%
+}
+
+% \thickhline command for thick horizontal lines that span the table
+\newcommand\thickhline{\noalign{\global\savedwidth\arrayrulewidth\global\arrayrulewidth 2pt}%
+\hline
+\noalign{\global\arrayrulewidth\savedwidth}}
+
+% Text layout
+\raggedright
+\setlength{\parindent}{0.5cm}
+\textwidth 5.25in 
+\textheight 8.75in
+
+% Bold the 'Figure #' in the caption and separate it from the title/caption with a period
+% Captions will be left justified
+\usepackage[aboveskip=1pt,labelfont=bf,labelsep=period,justification=raggedright,singlelinecheck=off]{caption}
+\renewcommand{\figurename}{Fig}
+
+% Remove brackets from numbering in List of References
+\makeatletter
+\renewcommand{\@biblabel}[1]{\quad#1.}
+\makeatother
+
+% Header and Footer with logo
+\usepackage{lastpage,fancyhdr}
+\usepackage{epstopdf}
+%\pagestyle{myheadings}
+\pagestyle{fancy}
+\fancyhf{}
+%\setlength{\headheight}{27.023pt}
+%\lhead{\includegraphics[width=2.0in]{PLOS-submission.eps}}
+\rfoot{\thepage/\pageref{LastPage}}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrule}{\hrule height 2pt \vspace{2mm}}
+\fancyheadoffset[L]{2.25in}
+\fancyfootoffset[L]{2.25in}
+\lfoot{\today}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{wrapfig}
+\usepackage{float}
+\usepackage{colortbl}
+\usepackage{pdflscape}
+\usepackage{tabu}
+\usepackage{threeparttable}
+\usepackage{threeparttablex}
+\usepackage[normalem]{ulem}
+\usepackage{makecell}
+\usepackage{xcolor}
+% Remove comment for double spacing
+% \usepackage{setspace}
+% \doublespacing
+\makeatletter
+\makeatother
+\makeatletter
+\makeatother
+\makeatletter
+\@ifpackageloaded{caption}{}{\usepackage{caption}}
+\AtBeginDocument{%
+\ifdefined\contentsname
+  \renewcommand*\contentsname{Table of contents}
+\else
+  \newcommand\contentsname{Table of contents}
+\fi
+\ifdefined\listfigurename
+  \renewcommand*\listfigurename{List of Figures}
+\else
+  \newcommand\listfigurename{List of Figures}
+\fi
+\ifdefined\listtablename
+  \renewcommand*\listtablename{List of Tables}
+\else
+  \newcommand\listtablename{List of Tables}
+\fi
+\ifdefined\figurename
+  \renewcommand*\figurename{Figure}
+\else
+  \newcommand\figurename{Figure}
+\fi
+\ifdefined\tablename
+  \renewcommand*\tablename{Table}
+\else
+  \newcommand\tablename{Table}
+\fi
+}
+\@ifpackageloaded{float}{}{\usepackage{float}}
+\floatstyle{ruled}
+\@ifundefined{c@chapter}{\newfloat{codelisting}{h}{lop}}{\newfloat{codelisting}{h}{lop}[chapter]}
+\floatname{codelisting}{Listing}
+\newcommand*\listoflistings{\listof{codelisting}{List of Listings}}
+\makeatother
+\makeatletter
+\@ifpackageloaded{caption}{}{\usepackage{caption}}
+\@ifpackageloaded{subcaption}{}{\usepackage{subcaption}}
+\makeatother
+\makeatletter
+\makeatother
+\ifLuaTeX
+  \usepackage{selnolig}  % disable illegal ligatures
+\fi
+\usepackage[numbers,square,comma]{natbib}
+\bibliographystyle{plos2015}
+\IfFileExists{bookmark.sty}{\usepackage{bookmark}}{\usepackage{hyperref}}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same} % disable monospaced font for URLs
+\hypersetup{
+  pdftitle={Environmental Predictors Impact Microbial-based Postmortem Interval (PMI) Estimation Models Within Human Decomposition Soils},
+  pdfauthor={Allison R. Mason; Hayden S. McKee-Zech; Dawnie W. Steadman; Jennifer M. DeBruyn},
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+
+
+
+\begin{document}
+\vspace*{0.2in}
+
+% Title must be 250 characters or less.
+\begin{flushleft}
+{\Large
+\textbf\newline{Environmental Predictors Impact Microbial-based
+Postmortem Interval (PMI) Estimation Models Within Human Decomposition
+Soils} % Please use "sentence case" for title and headings (capitalize only the first word in a title (or heading), the first word in a subtitle (or subheading), and any proper nouns).
+}
+\newline
+\\
+% Insert author names, affiliations and corresponding author email (do not include titles, positions, or degrees).
+Allison R. Mason\textsuperscript{1}, Hayden S.
+McKee-Zech\textsuperscript{2}, Dawnie W.
+Steadman\textsuperscript{2}, Jennifer M. DeBruyn\textsuperscript{3,1*}
+\\
+\bigskip
+\textbf{1} Department of Microbiology, University of
+Tennessee-Knoxville, Knoxville, TN, USA, \\ \textbf{2} Department of
+Anthropology, University of
+Tennessee-Knoxville, Knoxville, TN, USA, \\ \textbf{3} Department of
+Biosystems Engineering and Soil Science, University of
+Tennessee-Knoxville, Knoxville, TN, USA, 
+\bigskip
+
+% Insert additional author notes using the symbols described below. Insert symbol callouts after author names as necessary.
+% 
+% Remove or comment out the author notes below if they aren't used.
+%
+% Primary Equal Contribution Note
+\Yinyang These authors contributed equally to this work.
+
+% Additional Equal Contribution Note
+% Also use this double-dagger symbol for special authorship notes, such as senior authorship.
+%\ddag These authors also contributed equally to this work.
+
+% Current address notes
+\textcurrency Current Address: Dept/Program/Center, Institution Name, City, State, Country % change symbol to "\textcurrency a" if more than one current address note
+% \textcurrency b Insert second current address 
+% \textcurrency c Insert third current address
+
+% Deceased author note
+\dag Deceased
+
+% Group/Consortium Author Note
+\textpilcrow Membership list can be found in the Acknowledgments
+sections
+
+% Use the asterisk to denote corresponding authorship and provide email address in note below.
+* jdebruyn@utk.edu
+
+\end{flushleft}
+
+\section*{Abstract}
+Microbial succession has been suggested to supplement established
+postmortem interval (PMI) estimation methods for human remains. Due to
+limitations of entomological and morphological PMI methods, microbes are
+an intriguing target for forensic applications as they are present at
+all stages of decomposition. Previous machine learning models from soil
+necrobiome data have produced PMI error rates from two and a half to six
+days; however, these models are built from small datasets (n = 4
+individuals). Additionally, these models are built solely on amplicon
+sequencing of biomarkers (e.g., 16S rRNA genes) and do not consider
+environmental factors that influence the presence and abundance of
+microbial decomposers. This study builds upon current research by
+evaluating the inclusion of environmental data on microbial-based PMI
+estimates from decomposition soil samples. Random forest regression
+models were built to predict PMI using relative taxon abundances
+obtained from different biological markers (bacterial 16S, fungal ITS,
+16S-ITS combined) and taxonomic levels (phylum, class, order, OTU), both
+with and without environmental predictors (ambient temperature, soil pH,
+soil conductivity, and enzyme activities) from 19 deceased human
+individuals that decomposed on the soil surface (Tennessee, USA). Model
+performance was evaluated by calculating the mean absolute error (MAE).
+MAE ranged from 796 to 997 ADH across all models. 16S models
+outperformed ITS models (p = 0.007), while combining 16S and ITS did not
+improve 16S models alone (p = 0.37). Inclusion of environmental data in
+PMI prediction models had varied effects on MAE depending on the
+biological marker and taxonomic level conserved. Specifically, inclusion
+of the measured environmental features reduced MAE for all ITS models,
+but improved 16S models at higher taxonomic levels (phylum and class).
+Overall, we demonstrate some level of predictability in soil microbial
+succession during human decomposition, however error rates were high
+when considering a large population of donors.
+
+
+\linenumbers\hypertarget{introduction}{%
+\section{Introduction}\label{introduction}}
+
+Microbial communities undergo succession in response to disturbance
+events \citep{shade_fundamentals_2012}. Vertebrate death and subsequent
+decomposition represent one such event, where microbial community
+composition is altered in response to nutrient deposition and altered
+environmental conditions
+\citep{howard_characterization_2010, pechal_potential_2014, metcalf_microbial_2013, cobaugh_functional_2015, javan_human_2016, mason_microbial_2023}.
+Microbial succession has been studied in various carcass/cadaver
+decomposition microhabitats, including internal organs
+\citep{javan_thanatomicrobiome_2016, bell_sex-related_2018, can_distinctive_2014, lutz_effects_2020, li_potential_2021, hauther_estimating_2015, dong_succession_2019},
+skin
+\citep{pechal_potential_2014, metcalf_microbial_2013, hyde_initial_2015, pechal_large-scale_2018, johnson_machine_2016, metcalf_microbial_2016},
+bone \citep{damann_potential_2015, emmons_postmortem_2022}, and soils
+\citep{metcalf_microbial_2013, cobaugh_functional_2015, metcalf_microbial_2016, singh_temporal_2017, mason_body_2022}.
+These studies suggest that these successional changes may be robust and
+universal enough to be used to predict the postmortem interval (PMI), or
+time elapsed since death (or beginning of decomposition). PMI
+estimations can be important evidence for death investigations, allowing
+law enforcement to establish a timeline of events
+\citep{moffatt_improved_2016}. The work developing microbial-based PMI
+models has been inspired by forensic entomology methods, which link
+insect succession or development to PMI. Entomological PMI estimation
+methods are widely used, but limited to forensic cases where insects are
+present, the species is identifiable, and temperature data can be
+collected. Unlike insects, microbes do not have a pre-colonization phase
+where they must be exposed to, detect, and accept a carcass
+\citep{tarone_is_2017, tomberlin_roadmap_2011}, as they are already
+host-associated and present in the surrounding environment
+\citep{mason_microbial_2023}. Together, this makes microbes advantageous
+for developing a forensic application estimating time since death.
+
+Thus far researchers have assessed microbial abundance-based PMI
+prediction models in all major microhabitats and three different
+mammalian species. This includes internal
+\citep{liu_predicting_2020, hu_predicting_2021}, external/skin
+\citep{pechal_potential_2014, johnson_machine_2016, metcalf_microbial_2016, belk_microbiome_2018},
+and soil \citep{belk_microbiome_2018} microbial communities during pig
+(\emph{Sus scrofa}) \citep{pechal_potential_2014}, mouse (\emph{Mus
+musculus})
+\citep{metcalf_microbial_2016, liu_predicting_2020, belk_microbiome_2018},
+and human (\emph{Homo sapiens})
+\citep{johnson_machine_2016, metcalf_microbial_2016, hu_predicting_2021, belk_microbiome_2018}
+decomposition. These models suggest some level of predictability in
+microbial succession; however, results differ based on the microhabitat,
+taxonomic level considered, and algorithm used for model construction.
+To date, most studies apply supervised machine learning algorithms to
+taxonomic abundance data derived from amplicon sequencing of conserved
+markers of a few taxa \citep{pechal_potential_2014} or whole microbial
+communities
+\citep{johnson_machine_2016, metcalf_microbial_2016, liu_predicting_2020, hu_predicting_2021, belk_microbiome_2018}.
+Within these studies, random forest regression is the most frequently
+used supervised machine learning algorithm. These microbial PMI models
+report error ranging from \textasciitilde15 hours for mouse intestine
+samples to \textasciitilde58 hours in mouse brain samples
+\citep{liu_predicting_2020}, up to 138 accumulated degree days for human
+skin samples \citep{johnson_machine_2016}, and two to six days for soil
+samples below decomposing mice and human \citep{belk_microbiome_2018}.
+
+Of the three decomposition microhabitats in terrestrial decomposition
+systems (\emph{i.e.}, internal, external, and soil), soils have received
+the least attention. While there have been multiple studies assessing
+internal and external/skin succession
+\citep{pechal_potential_2014, johnson_machine_2016, metcalf_microbial_2016, liu_predicting_2020, hu_predicting_2021, belk_microbiome_2018},
+only one in-depth study has sought to predict PMI from soil microbial
+community succession \citep{belk_microbiome_2018} from a mixed human and
+mouse dataset (n = 4 humans). While the current soil studies provide
+foundational knowledge for estimating PMI from soil microbial
+succession, it is unclear how inter-individual variation and potential
+species differences may impact model performance, and thus what the
+predictability would be across a larger population of humans. Recent
+work suggests differences in decomposition patterns may exist between
+species \citep{dautartas_differential_2018, debruyn_comparative_2021}
+and even within species, due to intrinsic carcass properties
+(\emph{e.g.}, body composition) \citep{mason_body_2022}. Consequently,
+there is a need to investigate the predictability of soil microbial
+succession within a larger human dataset in order to assess
+applicability of these models for forensic science. Additionally,
+current microbial-based PMI estimation models are trained using relative
+abundance of microbial taxa as model features. However, observed changes
+in soil environmental parameters over time may also be used as
+indicators of decomposition time. For example, soil electrical
+conductivity (correlates to salinity), ammonium, and nitrate
+concentrations have been shown to undergo predictable changes in human
+decomposition soils
+\citep{aitkenhead-peterson_mapping_2012, fancher_evaluation_2017, taylor_high_2020}.
+Thus, it is possible that the inclusion of environmental predictors
+along with taxon relative abundance may help to improve model
+estimation.
+
+The goals of this study were to 1) determine the utility of soil
+microbial communities for predicting decomposition time during human
+decomposition across a large population; 2) determine which biological
+marker (16S rRNA, Internal Transcribed Spacer (ITS), or both) and
+taxonomic level (phylum, order, class, or OTU) results in the most
+accurate model predictions; and 3) assess how inclusion of soil
+environmental parameters (e.g., moisture, temperature, pH, conductivity,
+and enzyme rates) as model features affects model accuracy. Our first
+aim was to investigate microbial-based model performance across a larger
+human sample (n = 19) to validate previously developed models. Our
+second aim was to evaluate model performance using different biological
+markers, \emph{i.e.}, genes commonly used as sequencing targets.
+Previous work reported that 16S rRNA gene-based models performed better
+then 18S rRNA gene or ITS models in soil \citep{belk_microbiome_2018}.
+However, we hypothesized that ITS-based models would be more accurate
+than 16S-based models in a large dataset: In previous work, we observed
+that fungal community composition between individuals became more
+similar over decomposition time, whereas bacterial communities did not,
+suggesting less noise and better predictability in the fungal
+communities \citep{mason_body_2022}. We also aimed to assess which
+taxonomic level(s) resulted in the greatest model accuracy. Based on
+previous results \citep{belk_microbiome_2018, mason_body_2022}), we
+hypothesized that higher taxonomic levels, such as phylum and class
+would provide better PMI prediction. Our third aim was to probe the
+impact of environmental features on model prediction. While no previous
+studies have addressed this question, we hypothesized that inclusion of
+environmental predictors known to change in decomposition soils would
+help to improve PMI model predictions. Soil pH and conductivity are
+known drivers of microbial community dynamics
+\citep{lauber_pyrosequencing-based_2009, rath_linking_2019}, while
+enzyme activities provide insight into functionality of the microbial
+community, so we chose to evaluate these parameters. We addressed our
+study aims using sequencing (16S rRNA and ITS2 amplicon) and soil
+physicochemical data from 19 deceased human individuals
+\citep{mason_body_2022} decomposed on the soil surface at the University
+of Tennessee's Anthropology Research Facility (ARF) in Tennessee, USA.
+Random forest regressions were applied to datasets with different
+combinations of biological marker (16S only, ITS only, 16S and ITS) and
+taxonomic level (phylum, class, order, OTU), both with and without
+environmental predictors. Model performance was then compared by
+calculating the mean absolute error (MAE) to determine the influence of
+different combinations of features on PMI estimation.
+
+\hypertarget{materials-and-methods}{%
+\section{Materials and methods}\label{materials-and-methods}}
+
+\hypertarget{study-design}{%
+\subsection{Study design}\label{study-design}}
+
+This work uses datasets generated from our previous study
+\citep{mason_body_2022} , which revealed the influence of intrinsic, or
+cadaver-related factors, on explaining variation in soil microbial
+communities during human decomposition. Our current study uses these
+datasets to assess the effects of environmental factors on
+predictability of this succession to estimate PMI. Full experimental
+details are reported in \citep{mason_body_2022}. Briefly, decomposition
+of 19 deceased whole body human donors took place at the Anthropology
+Research Facility (ARF), located at the University of Tennessee in
+Knoxville, TN, USA (35\textdegree 56' 28'' N, 83\textdegree 56' 25'' W).
+The ARF is a forested outdoor facility consisting of clay loam and
+channery clay loam soils of the Coghill-Corryton complex (CcE)
+\citep{mason_body_2022, keenan_spatial_2018, damann_potential_2015}.
+
+Adult individuals with no open wounds or had not been autopsied were
+chosen for this study, as this could alter microbial decomposers prior
+to and during our study. Individuals were selected independent of
+demographic, however all individuals self-identified as White and ranged
+in age from 40 to 91 years \citep{mason_body_2022}. No living human
+subjects were involved, and therefore this study was exempt from review
+by the University of Tennessee Institutional Review Board. Individuals
+were continuously placed supine unclothed on the soil surface between
+February 2019 and March 2020. Hourly temperatures were recorded using
+TinyTag temperature and humidity loggers (Gemini Data Loggers, UK) until
+un-enrollment at the end of active decomposition, characterized by
+collapse of the abdomen and cessation of fluid leaking from the trunk
+\citep{mason_body_2022, megyesi_using_2005}. Accumulated degree hours
+(ADH) were calculated using hourly temperature readings: 0 ADH was
+defined as time of placement within ARF, and a baseline temperature of
+10\textdegree C was used for ADH calculations to keep our results
+comparable with entomology-based methods \citep{byrd_development_2001}.
+
+\hypertarget{soil-sampling-and-analysis}{%
+\subsection{Soil sampling and
+analysis}\label{soil-sampling-and-analysis}}
+
+As previously described in \citep{mason_body_2022}, five cm soil cores
+were collected from the decomposition-impacted area surrounding each
+individual at predetermined accumulated degree hour (ADH) intervals
+until the end of active decomposition. ADH intervals included prior to
+placement, 100, 250, 500, 750, and 1000 ADH, and thereafter at 500 ADH
+intervals until un-enrollment. For each respective sample, cores were
+homogenized and debris (\emph{e.g.}, roots, insect larvae, rocks, etc.)
+removed by hand. Soil samples were flash frozen in liquid nitrogen and
+stored at -80\textdegree C prior to DNA extraction. Soil pH and
+electrical conductivity (EC) were measured from soil slurries using an
+Orion Star\texttrademark  A329 pH/ISE/Conductivity/Dissolved Oxygen
+portable multiparameter meter (ThermoFisher), as described in
+\citep{mason_body_2022} and gravimetric was measured in duplicate by
+oven drying 2 to 3 g soil aliquots at 105\textdegree C for 72 hours.
+Enzyme activities of \(\beta\)-glucosidase (BG),
+N-acetyl-\(\beta\)-D-glucosaminidase (NAG), leucine amino peptidase
+(LAP), and alkaline phosphatase (PHOS) were measured according to a
+modified procedure by Bell et al.~(2013)
+\citep{mason_body_2022, bell_high-throughput_2013}.
+
+\hypertarget{dna-extraction-sequencing-and-amplicon-sequence-analysis}{%
+\subsection{DNA extraction, sequencing, and amplicon sequence
+analysis}\label{dna-extraction-sequencing-and-amplicon-sequence-analysis}}
+
+DNA extracts were obtained as described in \citep{mason_body_2022}.
+Briefly, 0.25 g of soil was extracted with the DNeasy Powerlyzer
+PowerSoil kit (QIAGEN Inc.) following manufacturer's instructions with
+modifications for our soil texture (clay loam) and condition (high
+organic content). Specifically, soils were homogenized under parameters
+suggested for high organic soils (2,500 RPM for 45 s). DNA concentration
+was determined using a fluorometric assay
+(Quant-iT\texttrademark  PicoGreen\textregistered  dsDNA Assay Kit
+(Invitrogen)) with a total volume of 200 \(\mu\)l and 1 \(\mu\)l of DNA.
+All DNA extracts were sent to the University of Tennessee Sequencing
+Core Facility (Knoxville, TN) for 16S rRNA and ITS2 region amplicon
+sequencing on the Illumina MiSeq platform (2 x 150 bp). The primer set
+515F \citep{parada_every_2016} /806R \citep{apprill_minor_2015} was used
+to amplify the V4 region of the 16S rRNA gene, while the ITS2 region in
+fungi was amplified using primers described previously
+\citep{mason_body_2022, cregger_populus_2018}. All raw sequences have
+been deposited in the National Center for Biotechnology Information's
+Sequence Read Archive under the BioProject PRJNA817528.
+
+Raw sequences were processed in Mothur \citep{schloss_introducing_2009}
+(v.1.43.0) to cluster into 97\% similarity operational taxonomic units
+(OTUs) and generate OTU count tables for both 16S and ITS datasets as
+described in \citep{mason_body_2022}, though in this study all OTUs were
+retained (singletons and doubletons were not removed). Additionally,
+control samples and samples greater than 5000 ADH were removed in R.
+Samples were cut off at 5000 ADH to capture the linear response of soil
+parameters and account for variation in decomposition timeframes between
+individuals observed in \citep{mason_body_2022}. This resulted in 113
+samples from 19 individuals for model construction.
+
+\hypertarget{machine-learning-models}{%
+\subsection{Machine learning models}\label{machine-learning-models}}
+
+Read counts were total sum scaled (TSS) by determining the relative
+abundance of each OTU and normalizing to a standard library size (10,000
+for all samples) using phyloseq \citep{mcmurdie_phyloseq_2013}
+(v1.32.0). This allowed for comparison of reads across samples and
+between biomarkers. We also removed OTUs with less than 10 reads across
+all samples in TSS normalized count tables to reduce noise in the
+datasets. 16S and ITS TSS read count tables were generated at the
+phylum, order, and class levels by summing the corresponding OTU table
+at each respective taxonomic level and then applying the TSS
+normalization as described above. One of our goals was to compare
+predictability of bacterial (16S only), fungal (ITS only), or both
+(16S-ITS) communities; therefore, after TSS normalization, 16S-ITS
+combined datasets for each taxonomic level (phylum, order, class, OTU)
+were generated by merging respective 16S and ITS TSS count tables. As a
+result, 12 datasets were created and used for random forest models.
+
+We chose to apply random forest regression to datasets to predict PMI in
+ADH. This kept our study similar to those previously conducted in
+decomposition soil \citep{belk_microbiome_2018}, while also providing a
+first assessment of the predictability of soil microbial succession
+during human decomposition in our geographical region (Knoxville, TN).
+Model construction was completed in R using the Ranger
+\citep{wright_ranger_2017} (v0.13.1) package. First, samples were
+assigned to testing or training datasets. This was completed by randomly
+assigning 6 donors (\textasciitilde1/3) to the test set, while the
+remaining 13 were grouped into the training set. This approach was
+conducted following Belk et al.~(2018) \citep{belk_microbiome_2018}, to
+ensure that all samples from a single individual were in either the
+testing or training set, respectively.
+
+Next, random forest regressions were applied to microbial taxa TSS
+normalized count tables in Ranger. First, random forest model parameters
+node size (3, 5, 7, 9) and sample size (0.55, 0.632, 0.70, 0.80) were
+hyper-tuned by comparing models with different combinations of the
+parameters listed. The optimal model was chosen by assessing the
+out-of-bag mean square error (OOB MSE) of each model and choosing the
+set of parameters with the lowest OOB MSE. The optimum model for each
+biomarker and taxonomic level was assessed by calculating the OOB MSE of
+the model and the root mean square error (RMSE) and mean absolute error
+(MAE) for predictions of the testing set in 100 runs of the optimum
+model. RMSE and MAE were calculated using rmse() and mae() functions
+from the R package Metrics (v 0.1.4). This process was repeated for
+models including measured environmental parameters, with values for
+ambient temperature (\textdegree C), pH, electrical conductivity (EC),
+moisture, \(\beta\)-glucosidase (BG) activity,
+N-acetyl-\(\beta\)-D-glucosaminidase (NAG) activity, leucine amino
+peptidase (LAP) activity, and alkaline phosphatase (PHOS) activity
+included as model features (Table~\ref{tbl-modelparams}). For all
+environmental parameters, aside from temperature, log response ratio
+normalized values \citep{mason_body_2022, risch_effects_2020} were used
+to account for natural seasonal differences in these parameters. The top
+25 most influential model features were extracted from each optimum
+model to assess taxa/environmental factors influencing model
+predictions. To evaluate the potential differences in model predication
+between biomarkers and taxonomic levels, linear regression was applied
+to the average MAE values (mean of 100 runs per model). Variation in MAE
+due to treatment variables was assessed with ANOVA, while differences
+between treatment groups were determined with post-hoc t-tests in R.
+Code for generating all feature tables and random forest model
+development can be found at
+https://github.com/jdebruyn/TOX-microbiology.
+
+\hypertarget{tbl-modelparams}{}
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 2\tabcolsep) * \real{0.2172}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 2\tabcolsep) * \real{0.7828}}@{}}
+\caption{\label{tbl-modelparams}Overview of variables used to construct
+models. OTU = Operational taxonomic unit.}\tabularnewline
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Type of data
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Predictor variables tested
+\end{minipage} \\
+\midrule\noalign{}
+\endfirsthead
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Type of data
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Predictor variables tested
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+Bacterial and fungal taxa (OTUs) relative abundances & 16S OTUs, ITS
+OTUs, both 16S and ITS OTUs \\
+Phylogenetic level & Phylum, order, class, OTU \\
+Environmental parameters & Ambient temperature, soil electrical
+coductivity, pH, moisture, enzyme activities (\(\beta\)-glucosidase,
+N-acetyl-\(\beta\)-D-glucosaminidase, leucine amino peptidase, and
+alkaline phosphatase) \\
+\end{longtable}
+
+\hypertarget{results}{%
+\section{Results}\label{results}}
+
+\hypertarget{soil-environmental-parameters}{%
+\subsection{Soil environmental
+parameters}\label{soil-environmental-parameters}}
+
+We previously reported how the measured soil parameters were altered in
+response to human decomposition \citep{mason_body_2022}. In summary,
+soil EC increased with progression of decomposition in soils surrounding
+all decomposing individuals. Soil pH was variable between individuals,
+with pH increasing (n = 5 individuals), decreasing (n = 12), or
+displaying minimal change relative to the controls (n = 2)
+\citep{mason_body_2022}. Extracellular enzyme activities were also
+variable between individuals, however general trends included increased
+NAG and PHOS over time. BG and LAP were variable over time;LAP activity
+correlated to soil pH \citep{mason_body_2022}.
+
+\hypertarget{general-model-statistics}{%
+\subsection{General model statistics}\label{general-model-statistics}}
+
+In total, 24 models were built in R. Twelve of the models contained
+environmental features and the other twelve did not. The number of taxa
+included as features in models without environmental data are reported
+in Table~\ref{tbl-numfeatures}. Bacterial (16S) and fungal (ITS)
+features ranged from 35 to 5195 and 16 to 2219, respectively, depending
+on taxonomic level. For all models, MAE ranged from 796 to 997 ADH
+(Fig~\ref{fig1}). Across all variables considered, the best performing
+model was the 16S phylum level model with environmental predictors (MAE
+796). In contrast, the worst performing model was the ITS phylum level
+without environmental data (MAE 997). Predictability, assessed by the
+linear relationship between predicted and observed values, for the
+training (Fig~\ref{fig2}A-C) and testing (Fig~\ref{fig2}D-F) datasets
+for the best 16S only, ITS only, and 16S-ITS models are shown in
+Fig~\ref{fig2}. \(\mathrm{R}^2\) for these models ranged from 0.9159 to
+0.95, however these values were reduced when making predictions for the
+testing dataset (\(\mathrm{r}^2\) = 0.7051 - 0.5884).
+
+\hypertarget{tbl-numfeatures}{}
+\begin{longtable}[]{@{}lrrr@{}}
+\caption{\label{tbl-numfeatures}Number of microbial taxonomic features
+provided as input for random forest regression investigated in this
+study. 16S-ITS microbial features are the sum of 16S and ITS
+features.}\tabularnewline
+\toprule\noalign{}
+& 16S Features & 16S-ITS Features & ITS Features \\
+\midrule\noalign{}
+\endfirsthead
+\toprule\noalign{}
+& 16S Features & 16S-ITS Features & ITS Features \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+OTU & 5195 & 7414 & 2219 \\
+Order & 264 & 411 & 147 \\
+Class & 111 & 177 & 66 \\
+Phylum & 35 & 51 & 16 \\
+\end{longtable}
+
+% Place figure captions after the first paragraph in which they are cited.
+\begin{figure}[!h]
+\caption{{\bf Mean absolute error (MAE) from 100 iterations of each respective model against the testing dataset.}
+Data are reported by biological marker (column), while color compares models with (gold) and without (gray) environmental predictors. Error bars are the standard error of MAE values across all 100 iterations for each respective model.}
+\label{fig1}
+\end{figure}
+
+\begin{figure}[!h]
+\caption{{\bf Model predictions for the training set (A-C) and testing set (D-F) for the top performing model for each biological marker as determined by the lowest MAE.}
+For each biological marker, top models included the 16S phylum + environmental data (A, D) 16-ITS order (B, E), and ITS order + environmental data (C, F). Predictability of each model is greater for the training set (A-C) compared to the testing set (D-F). Blue lines show the best fit linear relationship and shading indicted the 95\% confidence interval between actual PMI, in ADH, and predicted ADH within each respective dataset (training vs. testing).}
+\label{fig2}
+\end{figure}
+
+\hypertarget{model-comparison-biological-marker}{%
+\subsection{Model comparison: biological
+marker}\label{model-comparison-biological-marker}}
+
+Ability of random forest regressions to predict ADH varied depending on
+the biological marker used to build models (ANOVA F = 9.455, \emph{p} =
+0.001). ITS models were generally less accurate in predicting ADH
+compared to 16S or 16S-ITS models independent of taxonomic level and
+environmental data (Fig~\ref{fig3}). ITS models ranged in MAE from 874
+to 997 ADH, with a mean MAE of 910 ADH. Post-hoc t-tests show that ITS
+models, in general, had higher MAE than both 16S (t-test \emph{p} =
+0.001) and 16S-ITS (\emph{p} = 0.007) models. ITS models represented
+seven of the 10 worst performing models. In comparison, 16S and 16S-ITS
+models performed similarly (\emph{p} = 0.37). 16S models ranged in MAE
+from 796 to 889 ADH, with an average MAE of 837 ADH, while 16S-ITS
+models ranged in MAE from 801 to 893 ADH (average MAE = 852 ADH). This
+can also be observed among the best and worst performing models, where
+no ITS-only model was in the top 10 best performing models and combined
+16S-ITS models were dispersed among the best and worst models. For
+example, the 16S-ITS order level model without environmental data had
+the second lowest MAE (MAE 801) overall, but also the 16S-ITS OTU level
+model with environmental data had the sixth highest MAE (MAE 893).
+
+% Place figure captions after the first paragraph in which they are cited.
+\begin{figure}[!h]
+\caption{{\bf Mean absolute error (MAE) varies as a result of biological marker (16S, 16S-ITS, or ITS) used for model construction.}
+Average MAE is the result of 100 iterations of the 24 respective models against the testing set. Reported p-values are the result of post-hoc t-tests.}
+\label{fig3}
+\end{figure}
+
+\hypertarget{model-comparison-taxonomic-level}{%
+\subsection{Model comparison: taxonomic
+level}\label{model-comparison-taxonomic-level}}
+
+Some variation was observed in MAE due to taxonomic level considered for
+model development, however these differences were not significant (ANOVA
+F = 1.538; \emph{p} = 0.24). When considering the potential influence of
+taxonomic level within biomarkers, no significant difference in MAE by
+taxonomic level was observed for 16S (\emph{p} = 0.2), 16S-ITS (\emph{p}
+= 0.15), or ITS (\emph{p} = 0.63) models (Fig~\ref{fig4}). While these
+results were not significant, some trends were observed. First, order
+level models had the lowest MAE for all three biological markers
+assessed. This was also observed in Fig~\ref{fig1}, where order level
+models had the lowest MAE for all models without environmental data.
+Trends for the other taxonomic levels varied depending on the biological
+marker in consideration. Phylum and class level models performed
+similarly within 16S models, with OTU models generating the highest MAE.
+Within 16S-ITS models, class and OTU level models performed similarly,
+displaying the first and second highest MAE, respectively. For ITS
+models, phylum level models had the highest MAE, followed by OTU and
+class.
+
+% Place figure captions after the first paragraph in which they are cited.
+\begin{figure}[!h]
+\caption{{\bf Mean absolute error (MAE) does not vary as a result of taxonomic level (color) used for model construction for any of the biological markers assessed (column).}
+Mean MAE is the result of 100 iterations of the 24 respective models against the testing set. Order level model (green) generally had the lowest MAE, compared to phylum (purple), class (blue), and OTU (yellow) models. ANOVA p-values are the result of linear models comparing mean MAE to taxonomic level.}
+\label{fig4}
+\end{figure}
+
+\hypertarget{model-comparison-environmental-parameters}{%
+\subsection{Model comparison: environmental
+parameters}\label{model-comparison-environmental-parameters}}
+
+Overall, inclusion of environmental parameters in random forest models
+to predict ADH from soil microbial taxa impacted model accuracy. The
+direction of effect (\emph{i.e.}, increase or decrease in MAE) was
+dependent on biological marker and taxonomic level considered
+(Fig~\ref{fig1}). For ITS models, inclusion of environmental factors
+reduced MAE irrespective of the taxonomic level. This reduction was most
+pronounced for the phylum level model, in which MAE was reduced by 59
+ADH. In models containing 16S sequencing data (16S and 16S-ITS), effect
+of environmental features differed by taxonomic level. Specifically, for
+16S models, phylum, class, and order level models performed better and
+OTU level models performed worse when environmental data was included.
+This was similar for the combined 16S-ITS datasets at the phylum and OTU
+levels; however, class and order level models performed worse
+(\emph{i.e.}, increased MAE) when environmental factors were included.
+
+\hypertarget{model-features-top-models}{%
+\subsection{Model features: top
+models}\label{model-features-top-models}}
+
+In addition to assessing the predictability of different random forest
+models, we also looked at important model features to observe which taxa
+and/or environmental parameters impacted model performance. Here we
+highlight the top 25 features of best performing 16S (phylum +
+environmental), 16S-ITS (order), and ITS (order + environmental) models,
+determined by lowest MAE within the test set. Both 16S and ITS best
+models included environmental predictors, while the combined 16S-ITS
+model did not (Fig~\ref{fig5}A-C). For the 16S phylum model with
+environmental data, the most important model feature, as assessed by
+decrease in MSE, was soil electrical conductivity (EC). The remaining
+important features included \emph{Firmicutes}, \emph{Acidobacteria},
+\emph{Epsilonbacteraeota}, and \emph{Proteobacteria}, respectively.
+Other features of interest for this model included leucine
+aminopeptidase activity and \emph{Nitrospirae} (Fig~\ref{fig5}A). For
+the ITS order model with environmental predictors, the most important
+model features were \emph{Pleosporales}, soil EC, \emph{Rhizophydiales},
+Unclassified \emph{Basidiomycota}, and \emph{Auriculariales}
+(Fig~\ref{fig5}B). In this model, no other environmental parameters were
+among the top 25 important features. Other top taxonomic features of
+interest included \emph{Saccharomycetales} and Unclassified
+\emph{Sordariomycetes}, as their members are present in the human
+mycobiome and feces, respectively
+\citep{blackwell_fungi_2004, taylor_ascomycota_2015}. The best
+performing 16S-ITS model was the order level model without environmental
+features. Top features for this model were the bacterial order
+\emph{Lactobacillales} and the fungal order \emph{Pleosporales}.
+Bacterial orders \emph{Clostridiales}, \emph{Bacteroidales}, and
+\emph{Cardiobacteriales} were third, fourth, and fifth most important
+features, respectively (Fig~\ref{fig5}C). Relative abundance of
+anaerobic bacterial taxa identified in random forest models, including
+\emph{Firmicutes} (Fig~\ref{fig6}A) and \emph{Clostridiales}
+(Fig~\ref{fig6}C), increased as decomposition progressed. In contrast,
+relative abundance of the aerobic nitrifying organisms of the phylum
+\emph{Nitrospirae} decreased (Fig~\ref{fig6}B). Relative abundance of
+the bacterial order \emph{Cardiobacteriales} (Fig~\ref{fig6}D) and
+fungal order \emph{Pleosporales} (Fig~\ref{fig7}), identified in the
+mixed 16S-ITS order model, increased and decreased, respectively, over
+time.
+
+% Place figure captions after the first paragraph in which they are cited.
+\begin{figure}[!h]
+\caption{{\bf Top 25 model features determined by variance of responses in Ranger.}
+For each biological marker, top models included 16S phylum + environmental data (A), ITS order + environmental data (B), and 16S-ITS order (C). Bar color denotes whether the feature is a 16S taxon (green), ITS taxon (orange), or environmental feature (purple).}
+\label{fig5}
+\end{figure}
+
+\begin{figure}[!h]
+\caption{{\bf Relative abundance of select bacterial taxa identified as important features in random forest regressions.}
+Relative abundance of the phyla Firmicutes (A) and Nitrospirae (B) and orders Clostridiales (C) and Cardiobacteriales (D) change over time, here accumulated degree hours (ADH), within decomposition-impacted soils. Trends for each of the 19 individuals (named “TOX\#\#\#”) are delineated by color.}
+\label{fig6}
+\end{figure}
+
+\begin{figure}[!h]
+\caption{{\bf Relative abundance of the fungal order Pleosporales over time, here accumulated degree hours (ADH).}
+Trends for each of the 19 individuals (named “TOX\#\#\#”) are delineated by color.}
+\label{fig7}
+\end{figure}
+
+\hypertarget{discussion}{%
+\section{Discussion}\label{discussion}}
+
+The goal of this work was to assess the influence of biological marker,
+taxonomic level, and environmental parameters on model prediction of PMI
+from soil microbial communities. Model analysis revealed differences
+between model accuracy due to the biological marker, taxonomic level,
+and environmental parameters considered for model construction. Overall,
+models generally performed poorly, ranging in MAE from 796 to 997 ADH.
+In East Tennessee, these error rates would correspond to roughly 2.5 to
+3.5 days in July and greater than 28 days in February, based on average
+seasonal temperatures for the region. Therefore, error rates in the
+summer would be comparable to those previously reported for soil
+microbial communities (two to six days) \citep{belk_microbiome_2018} but
+would be substantially higher if considering decomposition during cooler
+seasons. Further, considering our total decomposition time of 5000 ADH,
+errors of 796 to 997 ADH equates to 15.9\% to 19.9\% of the total
+decomposition time. The wide error range when including a large number
+of subjects across multiple seasons suggests microbiome-based models may
+have low accuracy, particularly when considering individuals across the
+cline of human variation and through multiple seasons. Specifically, the
+decomposition systems were influenced by the starting resource, which is
+dictated by human variation at both the genetic and environmental
+levels. As a result, intrinsic factors have the capacity to alter both
+decomposer communities and decomposition rate, and therefore decomposer
+communities, leading to variation that can impact future models.
+
+One important source of variation in our study was the different rates
+of decomposition between individuals. While we attempted to correct for
+differences due to thermal energy input by using accumulated degree
+hours (ADH), there was still variability in terms of the morphological
+stage for a given ADH. For example, 5000 ADH represented the end of
+active decomposition for individual 009, but only about 25\% of active
+decomposition for individual 010. Additionally, this time-period did not
+include decomposition past active decay for any individual in our study,
+including advanced decomposition or sustained mummification or
+skeletonization, which could further impact model accuracy. Both
+individuals (009 and 010) were placed within the facility in the summer,
+experiencing the same local environmental conditions and potential for
+insect and scavenger communities, suggesting there are additional
+factors leading to variation in microbial communities within
+decomposition-impacted soils. These may include additional environmental
+parameters not considered in our models, and/or intrinsic differences
+between the individuals themselves (\emph{e.g.}, age, weight,
+medications, medical conditions etc.) that directly or indirectly
+impacted microbial communities through interactions with other
+decomposers (insects and scavengers). Moving forward, we will need to
+employ a strategy to combine antemortem and environmental data in order
+to investigate which factors help improve model predictions.
+
+\hypertarget{influence-of-diversity-and-taxa-succession-on-pmi-estimations}{%
+\subsection{Influence of diversity and taxa succession on PMI
+estimations}\label{influence-of-diversity-and-taxa-succession-on-pmi-estimations}}
+
+The trends we observed in model MAE between different biological
+markers, taxonomic levels, and inclusion of environmental data may be
+partly explained by differences in diversity between bacterial and
+fungal (16S vs.~ITS) communities and the number of taxa (\emph{i.e.},
+features), ultimately impacting resolution for predicting PMI. Overall,
+Chao1 richness and Inverse Simpson diversity were 10 and 15 times lower,
+respectively, in fungal communities compared to bacterial communities
+\citep{mason_body_2022}. This translated to differences in the total
+number of model features for 16S and ITS models: 16S models had roughly
+1.7 to 2.3 times more features, depending on the taxonomic level
+considered. As a result, more features, or taxa, in the dataset with
+relationships to time (\emph{i.e.}, progression of decomposition) may
+help to distinguish between timepoints to improve model predictability.
+
+In our previous work, we observed that the fungal community composition
+became more similar as decomposition progressed, with only a few taxa
+driving fungal successional patterns \citep{mason_body_2022}. This was
+also observed in Fu et al.~(2019) \citep{fu_fungal_2019}, in which only
+a few taxa (\emph{e.g.}, \emph{Ascomycota} sp., \emph{Yarrowia
+lipolitica}, etc.) displayed relationships with PMI. While we
+hypothesized that ITS-based models would be more accurate than 16S-based
+models because of these studies, our results revealed that 16S models
+generally outperformed ITS-based models and combining 16S and ITS did
+not improve 16S models alone. This result coincides with those reported
+by Belk et al.~(2018) \citep{belk_microbiome_2018}, in which 16S models
+had lower error than ITS or 18S models. The reduced number of taxa
+observed in fungal communities, in combination with relatively few taxa
+changing in abundance, may explain why ITS models had higher MAE than
+16S models. This may also explain why combining 16S and ITS datasets,
+which would increase overall diversity, did not outperform either marker
+alone. With only a few fungal taxa displaying changes over time, their
+inclusion may not have added additional resolution to the bacterial
+model.
+
+Diversity differences between bacterial and fungal communities may also
+drive some of the trends observed between taxonomic levels and with or
+without environmental factors. In this study, order level models
+performed best for all biological markers when not considering
+environmental features. This contrasts with findings by Belk at
+al.~(2018) \citep{belk_microbiome_2018}, where lower error was reported
+for phylum and class level models. This may be linked to a balance
+between taxonomic resolution and noise for this timeperiod of
+decomposition. In our study, OTU level models displayed the highest MAE
+for all biological markers when not considering environmental data,
+which corresponds with previous decomposition studies reporting
+increased inter-individual variation at lower taxonomic levels
+\citep{metcalf_microbial_2016, mason_body_2022, taylor_soil_2024}. This
+may explain why OTU level models displayed the highest MAE for all
+biological markers when not considering environmental data. Within
+decomopsition studies, microbial taxonomic succession has mostly been
+characterized at higher taxonomic levels, at which general patterns are
+more similar between individuals. However, aggregating microbial
+abundances at coarse taxonomic levels, such as phyla and class,
+inherently reduces data dimensionality. It is possible that this
+decrease in features, in conjunction with trends in taxon abundance over
+time, reduces the ability of the random forest regression to resolve
+timepoints at the highest taxonomic levels.
+
+This balance between diversity and features with resolution over time
+may also explain the effect of environmental features effect on model
+MAE. We hypothesized that inclusion of environmental parameters would
+improve all model predictions, by combining soil chemical and microbial
+successional patterns. While inclusion of environmental predictors
+improved some models, it decreased performance of others. This effect
+appears to be linked to biological marker and taxonomic level considered
+for model creation. Specifically, inclusion of environmental parameters
+into the lower diversity fungal models added features that helped to
+improve overall resolution to predict PMI. In contrast, inclusion of
+environmental data may have added additional noise to high diversity
+bacterial datasets at lower taxonomic levels, overall leading to
+decreased model performance.
+
+\hypertarget{model-features}{%
+\subsection{Model features}\label{model-features}}
+
+In addition to assessing model performance, we also investigated model
+features for each top performing 16S, 16S-ITS, and ITS model as
+determined by lowest MAE. This included the 16S phylum model with
+environmental data, the 16S-ITS order level model, and the ITS order
+level model with environmental data. Top model features for 16S phylum
+level models included taxa observed in previous human and animal
+decomposition studies, such as the bacterial phyla \emph{Firmicutes},
+\emph{Acidobacteria}, and \emph{Proteobacteria}
+\citep{cobaugh_functional_2015, metcalf_microbial_2016}. In our study,
+\emph{Firmicutes} and \emph{Nitrospirae} were shown to decrease as
+decomposition progressed, while \emph{Acidobacteria} decreased and
+\emph{Proteobacteria} remained consistent. These changes seem to be
+linked to differences in metabolism and environmental changes that occur
+when decomposition products are released into the surrounding soil. For
+example, it has been suggested heterotrophic microbial activity
+responding to the pulse of decomposition products results in depletion
+of soil oxygen \citep{taylor_soil_2024, keenan_mortality_2018}. This
+would impact the presence of anaerobic gut and soil taxa. While we did
+not measure soil oxygen in this study, soil respiration was increased in
+these soils, and so oxygen depletion is to be expected
+\citep{mason_body_2022}. The increased presence of taxa containing
+facultative and obligate anaerobic members, \emph{Firmicutes} and
+\emph{Clostridiales} in phylum and class models, respectively, and
+decrease in \emph{Nitrospirae}, containing nitrifying bacteria that
+oxidize nitrogen under aerobic conditions, support this hypothesis.
+Increases in \emph{Firmicutes} and \emph{Clostridiales} follow
+successional trends observed in internal (\emph{e.g.}, organs) microbial
+communities. Specifically, increased relative abundance of
+\emph{Clostridium} has been termed the ``Clostridium Effect'' by Javan
+et al.~(2017) \citep{javan_cadaver_2017} and observed in various organs
+\citep{javan_human_2016, javan_cadaver_2017} and the rectum
+\citep{debruyn_postmortem_2017} postmortem. Multiple studies, including
+this current work, have observed increased relative abundance in
+\emph{Firmicutes} and \emph{Clostridiales} in soils following deposition
+of decomposition fluid
+\citep{cobaugh_functional_2015, mason_microbial_2023, singh_temporal_2018, keenan_microbial_2023},
+suggesting some of these organisms may be host-derived. Decreased
+presence of \emph{Acidobacteria} in decomposition-impacted soils is
+likely linked to their oligotrophic characteristics in response to high
+nutrient deposition \citep{cobaugh_functional_2015, fierer_toward_2007}.
+Succession of these taxa and other taxa past 5000 ADH and the potential
+implications for PMI models is unclear.
+
+Order level models also revealed some information about soil microbial
+succession during human decomposition. The 16S-ITS order level model had
+the lowest MAE among all 16S-ITS models. Within this model, important
+taxa were a combination of 16S and ITS features present in respective
+models. Among the top bacterial features, \emph{Lactobacillales},
+\emph{Bacteroidales}, and \emph{Clostridiales} were all shown to display
+general increases as decomposition progressed. This is consistent with
+previous literature \citep{cobaugh_functional_2015}. One interesting
+find was \emph{Cardiobacteriales} as the fifth most important model
+feature. \emph{Cardiobacteriales} is a bacterial order of gram-negative
+rods, whose members are generally capable of fermentation of various
+sugars \citep{garrity_order_2007}. Within this order, only the genus
+\emph{Ignatzschineria} was identified based on the SILVA non-redundant
+database (v132) \citep{quast_silva_2013}. This genus has been identified
+in previous outdoor decomposition studies focusing on gut
+\citep{debruyn_postmortem_2017}, skin \citep{hyde_initial_2015}, and
+soil \citep{cobaugh_functional_2015} microbial communities.
+\emph{Ignatzschineria} are associated with insect species
+\citep{toth_proposal_2007, gupta_ignatzschineria_2011} and first appear
+in the soil during release of fluid. We previously observed this taxon
+in bacterial decomposition fluid communities \citep{mason_body_2022},
+further suggesting these organisms come from the body. Their association
+with insects highlights the potential for decomposer insect and
+scavenger activity to impact microbial succession during decomposition
+and suggests that PMI estimation models specific to decomposition
+setting (indoor or outdoor) may be required.
+
+Within the ITS order level models, the fungal order \emph{Pleosporales}
+was among the most influential taxon for PMI estimation.
+\emph{Pleosporales}, a member of \emph{Ascomycota} fungi, decreased as
+decomposition progressed. This was similar to observations by Fu et
+al.~(2019) \citep{fu_fungal_2019}, where \emph{Pleosporales} sp. was
+shown to be associated with non-decomposition soils by LEfSe (linear
+discriminant analysis effect size). \emph{Pleosporales} are often
+associated with plants, found as endophytes, epiphytes, and the
+rhizosphere {[}60{]}. Reduced relative abundance of these fungi in
+decomposition soils is interesting considering \emph{Pleosporales} have
+been shown to positively respond to nitrogen amendments
+\citep{lowell_comparative_2001, she_resource_2018}. Their response to
+decomposition products may suggest sensitivity to highly concentrated
+nitrogen amendments and/or other soil changes, such as osmotic stress in
+response to high EC, or intolerance to hypoxia typically observed in
+decomposition soils.
+
+Of the environmental predictors assessed, electrical conductivity (EC)
+appeared to be most influential. EC was recorded as the top and second
+most important feature for the 16S phylum and ITS order models with
+environmental data, respectively. This is likely due to patterns in soil
+EC being more consistent between individuals over time. Specifically, EC
+was shown to increase within decomposition soil over time for all 19
+individuals. Increases in EC observed in decomposition soils has been
+shown to positively correlate with increased ammonium concentrations
+\citep{keenan_mortality_2018, keenan_spatial_2019}, suggesting ammonium
+would also be a valuable predictor of microbial community dynamics. The
+other measured environmental parameters (pH, enzyme rates) were not
+identified as a top predictive features in the models. This is likely
+because these parameters were more variable both over time as well as
+between individuals, displaying both increases and decreases in response
+to human decomposition \citep{mason_body_2022}. While we did not
+consider all possible environmental parameters in this study, these
+results suggest that feature selection may help to identify relevant
+environmental parameters for model construction.
+
+\hypertarget{limitations-and-considerations}{%
+\subsection{Limitations and
+considerations}\label{limitations-and-considerations}}
+
+While there are intriguing investigations suggesting that microbial
+succession could be used to predict PMI, validation is critical prior to
+forensic application. Variation between decomposition studies, including
+vertebrate species observed, and experimental design, along with small
+sample sizes have limited model development to date. Additionally, most
+decomposition studies focus on bloat and active decay stages, when
+decomposers are most active in degrading soft tissues
+\citep{payne_summer_1965, carter_cadaver_2007}. While informative for
+initial compositional shifts, this timeframe does not allow us to assess
+for how long these communities may be impacted or if they return to
+pre-decomposition conditions \citep{shade_fundamentals_2012}. This study
+starts to address factors that influence PMI estimations from soil
+microbial succession using a larger set of human individuals, however
+many foundational questions remain. Below we discuss multiple areas to
+be expanded upon with future investigation.
+
+First, we did not include all possible environmental and soil data as
+model predictors, nor account for interactions with other decomposer
+communities. Other factors, such as respiration rates, oxygen
+concentration, ammonium, nitrate, dissolved organic carbon and nitrogen,
+sulfur, among others may be relevant features for models predicting PMI
+within the soil environment they have been shown to change during
+decomposition
+\citep{cobaugh_functional_2015, metcalf_microbial_2016, mason_body_2022, debruyn_comparative_2021, aitkenhead-peterson_mapping_2012, fancher_evaluation_2017, keenan_spatial_2018, keenan_mortality_2018, quaggiotto_dynamic_2019, szelecz_soil_2018, macdonald_carrion_2014, anderson_dynamics_2013, meyer_seasonal_2013, benninger_biochemical_2008, vass_time_1992, taylor_soil_2023}
+and have the capacity to structure microbial communities. In addition,
+it is possible that changes in soil parameters during human
+decomposition differ based on region due to soil type and climatic
+differences impacting decomposition progression or presence of microbial
+taxa \citep{carter_temperature_2008}, as well as the insect and
+scavenging species present across ecosystems. Lines of inquiry should
+include, but are not limited to, regional and seasonal (both within and
+between regions) soil microbial successional patterns in response to
+carcass decomposition and microbial-insect interactions, including
+effects of local insect species on microbial community dynamics. For
+example, \emph{Chrysomya megacephala}, an invasive fly species that has
+a proclivity for feces, has only recently been documented colonizing
+human remains in Tennessee, USA \citep{owings_first_2021}. This species
+carries up to 10 times the pathogenic bacterial load compared to the
+house fly, \emph{Musca domestica}, potentially introducing microbes that
+could alter the progression of decomposition and result in different
+microbial community succession between regions with and without this fly
+species \citep{chaiwong_blow_2014}.
+
+Second, we chose to implement the random forest regression algorithm as
+it is not as sensitive to non-linear data and has high interpretability
+compared to other forms of supervised and unsupervised machine learning
+algorithms \citep{ghannam_machine_2021}. This allowed us to assess
+prediction of PMI and identify taxa and environmental features that
+correlate with PMI, as well as kept our results similar to previous
+decomposition studies within the soil environment
+\citep{belk_microbiome_2018}. However, recent studies have compared
+multiple machine learning algorithms in other decomposition
+microhabitats (\emph{i.e.}, skin, organs), showing variation both
+between internal organs \citep{liu_predicting_2020} and within the same
+habitat \citep{johnson_machine_2016}. Both Liu et al.~(2020)
+\citep{liu_predicting_2020} and Johnson et al.~(2016)
+\citep{johnson_machine_2016} observed other machine learning algorithms
+performed better than random forest in higher diversity microhabitats
+such as the skin and caecum. As the soil environment is among the most
+diverse microbial habitat on the planet, it is necessary to assess
+different machine learning approaches when predicting PMI within this
+microhabitat \citep{metcalf_estimating_2019}.
+
+Third, total PMI (5000 ADH) considered for model construction will
+likely impact the performance and applicability of these models
+\citep{metcalf_estimating_2019}. Here we showed that order level models
+had the lowest MAE in models that do not include environmental features.
+This contrasts with findings by Belk at al.~(2018)
+\citep{belk_microbiome_2018} and our hypothesis, in which we expected
+lower error for phylum and class level models, suggesting differences
+between studies, such as region, sampling strategy, number of
+individuals, species, study timeframe or intrinsic differences between
+donor populations may impact model performance. For example, our study
+went through 5000 ADH, while Belk et al.~(2018)
+\citep{belk_microbiome_2018} presented data up to 25 days. In our study,
+5000 ADH corresponded to 13 to 115 days depending on the individual and
+time of year. Additionally, Belk et al.~(2018)
+\citep{belk_microbiome_2018} observed decreased model error when only
+using data points from the first 25 days of decomposition compared to
+the first 50 days. Therefore, future work is needed to determine the
+optimum PMI for microbial-based PMI models.
+
+Fourth, we chose to use operational taxonomic units (OTUs) and ADH
+calculated with a baseline of 10\textdegree C, as opposed to amplicon
+sequence variants (ASVs) and/or ADH with a baseline of 0\textdegree C or
+4\textdegree C. The recent application of denoising methods to generate
+ASVs has become popular in microbial studies using amplicon sequencing.
+However, we chose to cluster sequences into OTUs to reduce
+dimensionality in our raw dataset and the probability of splitting
+single genomes across multiple ASVs
+\citep{patrick_d_schloss_amplicon_2021}. While Glassman and Martiny
+(2021) \citep{glassman_broadscale_2018} observed similar results for
+alpha and beta diversity from OTUs and ASVs in leaf litter communities,
+other studies have shown differences in diversity when comparing the two
+methods \citep{chiarello_ranking_2022}. Thus, it is unclear if using
+OTUs or ASVs will impact machine learning algorithms such as random
+forest to predict PMI. Future work should investigate differences in PMI
+estimations from models constructed with OTUs as well as ASVs.
+
+Lastly, we chose to use a baseline of 10\textdegree C, which is commonly
+used for entomological methods due to the developmental threshold of
+regional (east Tennessee) insects \citep{byrd_development_2001}.
+However, other decomposition studies within the soil environment have
+also used 0\textdegree C or 4\textdegree C as thresholds for ADH or
+accumulated degree hour (ADD) calculations. These differences may impact
+PMI estimates; however, no one has addressed effects of different
+thresholds for ADH/ADD calculation on PMI estimates from microbial
+successional patterns within the soil. Therefore, a comprehensive
+comparison between different thermal energy unit (\emph{i.e.}, ADH, ADD
+and baseline) calculations is necessary.
+
+\hypertarget{conclusion}{%
+\section{Conclusion}\label{conclusion}}
+
+This study aimed to assess microbial abundance-based prediction of PMI
+from soil microbial communities. We compared models with different
+biological markers, taxonomic levels, and presence/absence of
+environmental variables to expand upon previous estimations of PMI from
+machine learning algorithms. From this large dataset of 19 individuals
+across multiple seasons, we observed higher error rates and decreased
+model precision compared to previously published models based on small
+datasets. Our results show that 16S and 16S-ITS models performed
+similarly and outperformed ITS models. Further, order level models have
+the lowest MAE when not considering environmental parameters. We also
+show that the addition of other factors, such as environmental
+parameters, have the potential to impact PMI estimations. We observed
+some level of predictability in soil microbial succession, however high
+error rates were seen across 19 individuals and across seasons. While
+our study size is one of the largest to date, it was demographically
+limited, and we certainly did not capture all antemortem conditions
+which could influence decomposition rates. Together this means
+microbial-based PMI models would need considerable validation and
+refinement across a diverse population and geographical regions prior to
+implementing in a forensic context.
+
+\hypertarget{supporting-information}{%
+\section{Supporting information}\label{supporting-information}}
+
+\hypertarget{acknowledgments}{%
+\section{Acknowledgments}\label{acknowledgments}}
+
+The authors would like to thank the donors and donor families, whose
+generosity of body donation made this research possible. We would like
+to acknowledge multiple individuals who helped with design and execution
+of the field study that supported this work. We would like to
+acknowledge Mary Davis, Sarah Schwing, Erin Patrick, and Thomas Delgado
+for preparation of donors prior to study. We would also like to thank
+Sarah Schwing, Erin Patrick, Katharina Hoeland, and Thomas Delgado for
+their help collecting daily observations of donors and soil samples used
+in this study.
+
+This project was supported by the National Institute of Justice (Award
+No.~DOJ-NIJ-2018-DU-BX-018) to DWS and JMD. The opinions, findings, and
+conclusions or recommendations expressed in this manuscript are those of
+the authors and do not necessarily reflect those of the Department of
+Justice.
+
+
+\nolinenumbers
+  \bibliography{bibliography.bib}
+
+\end{document}

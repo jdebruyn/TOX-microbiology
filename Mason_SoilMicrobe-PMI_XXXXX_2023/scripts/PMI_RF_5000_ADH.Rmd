@@ -1,0 +1,477 @@
+---
+title: "Random Forest models to estimate PMI (up to 5000 ADH)"
+author: "Allison R. Mason"
+date: "2023-08-31"
+output: html_document
+---
+
+## Overview
+
+This markdown document contains all code to reproduce random forest models in the publication XXX. ADH was caluculated used a base of 10C. For each individual, only samples with an ADH 
+
+```{r setup, include=FALSE}
+set.seed(4)
+
+library(readxl)
+library(phyloseq)
+library(tidyverse)
+library(ranger)
+library(randomForest)
+library(Metrics)
+library(here)
+
+colpalette2= c("khaki3","steelblue3","orange","chocolate","aquamarine4","plum3","black","mediumpurple4","violetred3","brown4","chartreuse3","lavenderblush4","lightpink","mediumpurple3","lightcyan1","palegreen4","red1","wheat4","papayawhip","tomato3","gold1")
+```
+
+## Load the data
+```{r, include = FALSE}
+#load the datasets:
+bact.n.otu = read_xlsx(here("data/TOX2_16S_TSS_meta_OTUtable.xlsx"))
+bact.n.class = read_xlsx(here("data/TOX2_16S_TSS_meta_Class_table.xlsx"))
+bact.n.order = read_xlsx(here("data/TOX2_16S_TSS_meta_Order_table.xlsx"))
+bact.n.phylum = read_xlsx(here("data/TOX2_16S_TSS_meta_Phylum_table.xlsx"))
+
+ITS.n.otu = read_xlsx(here("data/TOX2_ITS_TSS_meta_OTU_table.xlsx"))
+ITS.n.class = read_xlsx(here("data/TOX2_ITS_TSS_meta_Class_table.xlsx"))
+ITS.n.order = read_xlsx(here("data/TOX2_ITS_TSS_meta_Order_table.xlsx"))
+ITS.n.phylum = read_xlsx(here("data/TOX2_ITS_TSS_meta_Phylum_table.xlsx"))
+```
+
+
+### Raw dataset summary
+```{r}
+list_of_df <- list(bact.n.otu, bact.n.class, bact.n.order, bact.n.phylum, ITS.n.otu, ITS.n.class, ITS.n.order, ITS.n.phylum)
+names(list_of_df) <- c("bact.n.otu", "bact.n.class", "bact.n.order", "bact.n.phylum", "ITS.n.otu", "ITS.n.class", "ITS.n.order", "ITS.n.phylum")
+
+get_n_features <- function(df) {
+  
+  n_features <- df %>%
+    select(matches(c("Otu", "ITS"))) %>%
+    summarise(features = ncol(.)) %>%
+    pull()
+  
+  return(n_features)
+}
+
+n_features <- list_of_df %>% map_df(get_n_features)
+```
+
+## Filter samples - remove any samples > 5000 ADH from the datasets
+
+```{r, include = FALSE}
+filter_AHD10 <- function(df, adh_cutoff) {
+  df_filter <- df %>% filter(ADH_10_actual < adh_cutoff)
+  
+  return(df_filter)
+}
+
+df_list_5000 <- list_of_df %>% map(filter_AHD10, 5000)
+```
+
+### Filtered dataset summary
+```{r}
+n_features <- df_list_5000 %>% map_df(get_n_features)
+n_features
+```
+
+## Merge the corresponding filtered 16S and ITS datasets
+
+```{r, include=FALSE}
+merge_16S_ITS_df <- function(bact_its_pair, df_list) {
+  bact_df_name <- as.character(bact_its_pair[1])
+  its_df_name <- as.character(bact_its_pair[2])
+  
+  
+  ITS_df_sub <- df_list[[its_df_name]] %>% select(-Sample , -Type,-Donor,-Trt,-Sample_Type,-ADH,-Actual_ADH,-Timepoint,-Per_ADH,-Total_ADH,-Total_Days,-Season,-Samp_Season,-Sector,-Age,-Sex,-Stature,-Weight,-BMI,-BMI_level,-Temperature,-ADH_10_actual,-Diabetes,-Cancer,-Cardio,-Respiratory,-Neuro,-Pneumonia,-moisture,-pH,-pH_LRR,-EC,-EC_LRR,-BG_avg,-BG_LRR,-NAG_avg,-NAG_LRR,-PHOS_avg,-PHOS_LRR,-LAP_avg,-LAP_LRR,-Evolved_CO2,-LRR_resp)
+  
+  merged_df <- df_list[[bact_df_name]] %>% left_join(ITS_df_sub, by = "group")
+  return(merged_df)
+}
+
+
+
+merge_list <- list("bact.ITS.n.otu" = c("bact.n.otu", "ITS.n.otu"),
+             "bact.ITS.n.phylum" = c("bact.n.phylum", "ITS.n.phylum"),
+             "bact.ITS.n.class" = c("bact.n.class", "ITS.n.class"),
+             "bact.ITS.n.order" = c("bact.n.order", "ITS.n.order"))
+
+merged_df_5000 <- merge_list %>% map(merge_16S_ITS_df, df_list_5000)
+```
+
+### 16S-ITS datasets summary
+```{r}
+merged_df_5000 %>% map_df(get_n_features)
+```
+
+## How many taxonomic features are in each dataset?
+
+```{r, include=FALSE}
+# add merged df to df_list_5000
+df_list_5000 <- append(df_list_5000, merged_df_5000, after = length(df_list_5000))
+
+n_features <- df_list_5000 %>% map_df(get_n_features)
+# writexl::write_xlsx(n_features, here("data/taxonomic_features_summary_table.xlsx"))
+
+tax_sum <- n_features %>%
+  t %>%
+  as.data.frame() %>%
+  rename(features = V1) %>% 
+  mutate(model = row.names(.)) %>%
+  separate_wider_delim(model, ".n.", names = c("model", "taxonomy")) %>%
+  pivot_wider(names_from = taxonomy, values_from = features) %>% 
+  select(model, otu, order, class, phylum) %>%
+  rename(OTU = otu, Order = order, Class = class, Phylum = phylum) %>%
+  column_to_rownames(var = "model") %>%
+  t %>%
+  as.data.frame() %>%
+  select(bact, bact.ITS, ITS)
+```
+
+```{r, echo=FALSE}
+knitr::kable(tax_sum, col.names = c("16S Features", "16S-ITS Features", "ITS Features"), caption = "Number of microbial taxonomic features provided as input for random forest regression investigated in this study. 16S-ITS microbial features are the sum of 16S and ITS features.")
+```
+
+## Randomly subset the donors into training and testing sets
+
+```{r, include=FALSE, eval=FALSE}
+#want to keep all timepoint from the same donor in the same data set
+.33*19 #6 donors in the testing set 13 in the training set
+n = c("TOX001","TOX002","TOX003","TOX004","TOX005","TOX006","TOX007","TOX008","TOX009","TOX010","TOX011","TOX012","TOX013","TOX015","TOX016","TOX017","TOX018","TOX019","TOX020")
+
+sample(n, 6, replace = FALSE)
+```
+
+```{r}
+#assigned to th testing set: "TOX010", "TOX013", "TOX015", "TOX008", "TOX004", "TOX012"
+test = c("TOX010", "TOX013", "TOX015", "TOX008", "TOX004", "TOX012")
+#assigned to training set: "TOX001", "TOX002", "TOX003", "TOX005", "TOX006", "TOX007", "TOX009", "TOX011", "TOX016", "TOX017", "TOX018", "TOX019", "TOX020"
+train = c("TOX001", "TOX002", "TOX003", "TOX005", "TOX006", "TOX007", "TOX009", "TOX011", "TOX016", "TOX017", "TOX018", "TOX019", "TOX020")
+```
+
+
+The following 6 donors were assigned to the test set: `r test`. The remaining donors (`r train`) were assigned to the training set.
+
+## Models:
+```{r, include=FALSE}
+# create a results object 
+setClass("RF",
+         slots = c(
+           test_df = "data.frame",
+           train_df = "data.frame",
+           hyper_grid = "data.frame",
+           optimal_node_size = "numeric", 
+           optimal_sample_size = "numeric",
+           optimal_model_results = "list")
+         )
+
+RF <- function(df, test, train, env) {
+  train_set <- df %>% filter(Donor %in% train)
+  test_set <- df %>% filter(Donor %in% test)
+  
+  if (env == FALSE) {
+    #keep only observations from donor assigned to the training set and the response variable
+    train_set <- train_set %>% select(-group,-Sample,-Type,-Donor,-Trt,-Sample_Type,-ADH,-Actual_ADH,-Timepoint,-Per_ADH,-Total_ADH,-Total_Days,-Season,-Samp_Season,-Sector,-Age,-Sex,-Stature,-Weight,-BMI,-BMI_level,-Temperature,-Diabetes,-Cancer,-Cardio,-Respiratory,-Neuro,-Pneumonia,-moisture,-pH,-pH_LRR,-EC,-EC_LRR,-BG_avg,-BG_LRR,-NAG_avg,-NAG_LRR,-PHOS_avg,-PHOS_LRR,-LAP_avg,-LAP_LRR,-Evolved_CO2,-LRR_resp)  
+  
+    test_set <- test_set %>% select(-group,-Sample,-Type,-Donor,-Trt,-Sample_Type,-ADH,-Actual_ADH,-Timepoint,-Per_ADH,-Total_ADH,-Total_Days,-Season,-Samp_Season,-Sector,-Age,-Sex,-Stature,-Weight,-BMI,-BMI_level,-Temperature,-Diabetes,-Cancer,-Cardio,-Respiratory,-Neuro,-Pneumonia,-moisture,-pH,-pH_LRR,-EC,-EC_LRR,-BG_avg,-BG_LRR,-NAG_avg,-NAG_LRR,-PHOS_avg,-PHOS_LRR,-LAP_avg,-LAP_LRR,-Evolved_CO2,-LRR_resp)
+  } 
+  else {
+    #Keep response variable (ADH_actual) and numeric environmental data
+    train_set <- train_set %>% select(-group,-Sample,-Type,-Donor,-Trt,-Sample_Type,-ADH,-Actual_ADH,-Timepoint,-Per_ADH,-Total_ADH,-Total_Days,-Season,-Samp_Season,-Sector,-Age,-Sex,-Stature,-Weight,-BMI_level, -BMI, -Diabetes,-Cancer,-Cardio,-Respiratory,-Neuro,-Pneumonia,-pH,-EC,-BG_avg,-NAG_avg,-PHOS_avg,-LAP_avg,-Evolved_CO2,-LRR_resp) 
+    train_set <- train_set[complete.cases(train_set), ] #remove rows with NA values
+
+    #2: subset test
+    test_set <- test_set %>% select(-group,-Sample,-Type,-Donor,-Trt,-Sample_Type,-ADH,-Actual_ADH,-Timepoint,-Per_ADH,-Total_ADH,-Total_Days,-Season,-Samp_Season,-Sector,-Age,-Sex,-Stature,-Weight,-BMI_level, -BMI, -Diabetes,-Cancer,-Cardio,-Respiratory,-Neuro,-Pneumonia,-pH,-EC,-BG_avg,-NAG_avg,-PHOS_avg,-LAP_avg,-Evolved_CO2,-LRR_resp)
+    test_set = test_set[complete.cases(test_set), ] 
+  }
+  
+  #make a grid of parameters to search:
+hyper_grid <- expand.grid(
+  mtry = round((ncol(train_set)/3)-1),
+  node_size = seq(3,9,by=2),
+  sample_size = c(.55, .632, .70, .80),
+  OOB_MSE = 0
+)
+
+   # create a new RF_results object with the test and training sets filled
+  methods::new("RF", test_df = test_set, train_df = train_set, hyper_grid = hyper_grid)
+}
+
+
+# main function 
+initiate_tune_rf <- function(df, test, train, env) {
+  rf_obj <- RF(df, test, train, env)
+  
+  #run all model combinations
+  for (i in seq_along(1:nrow(rf_obj@hyper_grid))) {
+    rf_mod <- ranger::ranger(
+      formula = ADH_10_actual~., 
+      data = rf_obj@train_df,
+      num.trees = 500,
+      mtry = rf_obj@hyper_grid$mtry[i],
+      min.node.size = rf_obj@hyper_grid$node_size[i],
+      sample.fraction = rf_obj@hyper_grid$sample_size[i],
+      seed = 6
+    )
+    
+    # add OOB MSE to the grid
+    rf_obj@hyper_grid$OOB_MSE[i] <- rf_mod$prediction.error
+  }
+  
+  rf_obj@hyper_grid <- rf_obj@hyper_grid %>% arrange(OOB_MSE)
+  
+  rf_obj@optimal_node_size <- rf_obj@hyper_grid[1, "node_size"]
+  rf_obj@optimal_sample_size <- rf_obj@hyper_grid[1, "sample_size"]
+
+  return(rf_obj)
+}
+
+run_optimal_rf <- function(rf) {
+  # response_var <- colnames(rf@train_df)[1]
+  # assumes the RF data sets are set up using initiate_tune_rf, where the first column is the response variable
+  
+  otu_results = data.frame(matrix(NA, nrow = length(seq(1:100)),
+                                  ncol = length(seq(1:4))))
+  colnames(otu_results) = c("OOB_MSE", "RMSE", "MAE", "r_squared")
+
+  for (i in (1:100)) {
+
+    optimal_ranger <- ranger(
+      formula = ADH_10_actual ~ .,
+      data = rf@train_df,
+      num.trees = 500,
+      mtry = (ncol(rf@train_df)/3) - 1,
+      min.node.size = rf@optimal_node_size,
+      sample.fraction = rf@optimal_sample_size,
+      importance = 'impurity')
+
+    otu_results$OOB_MSE[i] <- optimal_ranger$prediction.error
+    otu_results$RMSE[i] <- Metrics::rmse(predict(optimal_ranger, rf@test_df)$predictions, rf@test_df$ADH_10_actual)
+    otu_results$MAE[i] <- Metrics::mae(rf@test_df$ADH_10_actual, predict(optimal_ranger, rf@test_df)$predictions)
+    otu_results$r_squared[i] <- optimal_ranger$r.squared
+  }
+  
+  # rf@optimal_model_results <- otu_results
+  # 
+  # # add final optimal model to look at important features
+  # rf@optimal_ranger <- optimal_ranger
+  
+  results <- list("summary" = otu_results,
+                  "optimal_ranger" = optimal_ranger)
+  rf@optimal_model_results <- results
+
+  return(rf)
+}
+  
+
+```
+
+
+### 16S models **without** environmental data
+
+#### OTU level
+
+```{r, include=FALSE}
+# 16S only
+#base dataframe: bact.n.otu in df_list_5000
+
+# no env
+bact_otu_noenv <- initiate_tune_rf(df_list_5000[["bact.n.otu"]], test, train, env = FALSE) |>
+  run_optimal_rf()
+
+# with env
+bact_otu_env <- initiate_tune_rf(df_list_5000[["bact.n.otu"]], test, train, env = TRUE) |>
+  run_optimal_rf()
+```
+
+
+```{r, include=FALSE}
+# ITS only
+#base dataframe: ITS.n.otu in df_list_5000
+
+# no env
+ITS_otu_noenv <- initiate_tune_rf(df_list_5000[["ITS.n.otu"]], test, train, env = FALSE) |>
+  run_optimal_rf()
+
+# with env
+ITS_otu_env <- initiate_tune_rf(df_list_5000[["ITS.n.otu"]], test, train, env = TRUE) |>
+  run_optimal_rf()
+```
+
+
+```{r, include=FALSE}
+# 16S-ITS
+#base dataframe: bact.ITS.n.otu in df_list_5000
+
+# no env
+bact_ITS_otu_noenv <- initiate_tune_rf(df_list_5000[["bact.ITS.n.otu"]], test, train, env = FALSE) |>
+  run_optimal_rf()
+
+# with env
+bact_ITS_otu_env <- initiate_tune_rf(df_list_5000[["bact.ITS.n.otu"]], test, train, env = TRUE) |>
+  run_optimal_rf()
+```
+
+#### order level
+
+```{r, include=FALSE}
+# 16S only
+#base dataframe: bact.n.order in df_list_5000
+
+# no env
+bact_order_noenv <- initiate_tune_rf(df_list_5000[["bact.n.order"]], test, train, env = FALSE) |>
+  run_optimal_rf()
+
+# with env
+bact_order_env <- initiate_tune_rf(df_list_5000[["bact.n.order"]], test, train, env = TRUE) |>
+  run_optimal_rf()
+```
+
+
+```{r, include=FALSE}
+# ITS only
+#base dataframe: ITS.n.order in df_list_5000
+
+# no env
+ITS_order_noenv <- initiate_tune_rf(df_list_5000[["ITS.n.order"]], test, train, env = FALSE) |>
+  run_optimal_rf()
+
+# with env
+ITS_order_env <- initiate_tune_rf(df_list_5000[["ITS.n.order"]], test, train, env = TRUE) |>
+  run_optimal_rf()
+```
+
+
+```{r, include=FALSE}
+# 16S-ITS
+#base dataframe: bact.ITS.n.order in df_list_5000
+
+# no env
+bact_ITS_order_noenv <- initiate_tune_rf(df_list_5000[["bact.ITS.n.order"]], test, train, env = FALSE) |>
+  run_optimal_rf()
+
+# with env
+bact_ITS_order_env <- initiate_tune_rf(df_list_5000[["bact.ITS.n.order"]], test, train, env = TRUE) |>
+  run_optimal_rf()
+```
+
+#### class level
+
+```{r, include=FALSE}
+# 16S only models 
+#base dataframe: bact.n.class in df_list_5000
+
+# no env
+bact_class_noenv <- initiate_tune_rf(df_list_5000[["bact.n.class"]], test, train, env = FALSE) |>
+  run_optimal_rf()
+
+# with env
+bact_class_env <- initiate_tune_rf(df_list_5000[["bact.n.class"]], test, train, env = TRUE) |>
+  run_optimal_rf()
+```
+
+
+```{r, include=FALSE}
+# ITS only
+#base dataframe: ITS.n.class in df_list_5000
+
+# no env
+ITS_class_noenv <- initiate_tune_rf(df_list_5000[["ITS.n.class"]], test, train, env = FALSE) |>
+  run_optimal_rf()
+
+# with env
+ITS_class_env <- initiate_tune_rf(df_list_5000[["ITS.n.class"]], test, train, env = TRUE) |>
+  run_optimal_rf()
+```
+
+
+```{r, include=FALSE}
+# 16S-ITS
+#base dataframe: bact.ITS.n.class in df_list_5000
+
+# no env
+bact_ITS_class_noenv <- initiate_tune_rf(df_list_5000[["bact.ITS.n.class"]], test, train, env = FALSE) |>
+  run_optimal_rf()
+
+# with env
+bact_ITS_class_env <- initiate_tune_rf(df_list_5000[["bact.ITS.n.class"]], test, train, env = TRUE) |>
+  run_optimal_rf()
+```
+
+
+#### phylum level
+
+```{r, include=FALSE}
+# 16S only models 
+#base dataframe: bact.n.phylum in df_list_5000
+
+# no env
+bact_phylum_noenv <- initiate_tune_rf(df_list_5000[["bact.n.phylum"]], test, train, env = FALSE) |>
+  run_optimal_rf()
+
+# with env
+bact_phylum_env <- initiate_tune_rf(df_list_5000[["bact.n.phylum"]], test, train, env = TRUE) |>
+  run_optimal_rf()
+```
+
+
+```{r, include=FALSE}
+# ITS only
+#base dataframe: ITS.n.phylum in df_list_5000
+
+# no env
+ITS_phylum_noenv <- initiate_tune_rf(df_list_5000[["ITS.n.phylum"]], test, train, env = FALSE) |>
+  run_optimal_rf()
+
+# with env
+ITS_phylum_env <- initiate_tune_rf(df_list_5000[["ITS.n.phylum"]], test, train, env = TRUE) |>
+  run_optimal_rf()
+```
+
+
+```{r, include=FALSE}
+# 16S-ITS
+#base dataframe: bact.ITS.n.phylum in df_list_5000
+
+# no env
+bact_ITS_phylum_noenv <- initiate_tune_rf(df_list_5000[["bact.ITS.n.phylum"]], test, train, env = FALSE) |>
+  run_optimal_rf()
+
+# with env
+bact_ITS_phylum_env <- initiate_tune_rf(df_list_5000[["bact.ITS.n.phylum"]], test, train, env = TRUE) |>
+  run_optimal_rf()
+```
+
+
+### Comibine results and save
+
+```{r}
+all_rf_results <- list("bact_otu_noenv" = bact_otu_noenv,
+                       "bact_otu_env" = bact_otu_env,
+                       "ITS_otu_noenv" = ITS_otu_noenv,
+                       "ITS_otu_env" = ITS_otu_env,
+                       "bact_ITS_otu_noenv" = bact_ITS_otu_noenv,
+                       "bact_ITS_otu_env" = bact_ITS_otu_env,
+                       
+                       "bact_order_noenv" = bact_order_noenv,
+                       "bact_order_env" = bact_order_env,
+                       "ITS_order_noenv" = ITS_order_noenv,
+                       "ITS_order_env" = ITS_order_env,
+                       "bact_ITS_order_noenv" = bact_ITS_order_noenv,
+                       "bact_ITS_order_env" = bact_ITS_order_env,
+                       
+                       "bact_class_noenv" = bact_class_noenv,
+                       "bact_class_env" = bact_class_env,
+                       "ITS_class_noenv" = ITS_class_noenv,
+                       "ITS_class_env" = ITS_class_env,
+                       "bact_ITS_class_noenv" = bact_ITS_class_noenv,
+                       "bact_ITS_class_env" = bact_ITS_class_env,
+                       
+                       "bact_phlyum_noenv" = bact_phylum_noenv,
+                       "bact_phylum_env" = bact_phylum_env,
+                       "ITS_phylum_noenv" = ITS_phylum_noenv,
+                       "ITS_phylum_env" = ITS_phylum_env,
+                       "bact_ITS_phylum_noenv" = bact_ITS_phylum_noenv,
+                       "bact_ITS_phylum_env" = bact_ITS_phylum_env)
+
+saveRDS(all_rf_results, here::here("data/all_rf_results.RDS"))
+```
