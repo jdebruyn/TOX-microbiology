@@ -119,9 +119,9 @@ mean_values %>%
   arrange(MAE) %>%
   # rename()
   # knitr::kable(., digits = 3, col.names = c("Model name", "OOB MSE", "RMSE", "MAE", "$r^2$", "Marker", "Taxonomic Level", "Enironmental parameters"), escape = FALSE) %>%
-  kableExtra::kbl(., digits = 3, col.names = c("Model name", "OOB MSE", "RMSE", "MAE", "$r^2$", "Marker", "Taxonomic Level", "Enironmental parameters"), booktabs = TRUE) %>%
+  kableExtra::kbl(., digits = 3, col.names = c("Model name", "OOB MSE", "RMSE", "MAE", "$r^2$", "Marker", "Taxonomic Level", "Enironmental parameters"), booktabs = TRUE) # %>%
   # kableExtra::kable_classic() %>%
-  kableExtra::save_kable(., file = here::here("figures/SupTable1.png"))
+  # kableExtra::save_kable(., file = here::here("figures/SupTable1.png"))
 
 # pdf(file = here::here("figures/SupTable1.pdf"))
 ```
@@ -220,7 +220,7 @@ model_1_opt_ranger <- all_rf_results[[model_1_idx]]@optimal_model_results$optima
 
 # train set accuracy
 mod1_train_predictions_lm <- lm(all_rf_results[[model_1_idx]]@train_df$ADH_10_actual ~ predict(model_1_opt_ranger, all_rf_results[[model_1_idx]]@train_df)$predictions)
-
+mod1_train_predictions_lm_aov <- anova(mod1_train_predictions_lm)
 
 mod1_train_predictions <- ggplot(data = NULL,
        aes(x = predict(model_1_opt_ranger, all_rf_results[[model_1_idx]]@train_df)$predictions,
@@ -404,6 +404,8 @@ mae_marker_box <- ggplot(mean_values) +
   stat_compare_means(method = "anova", hjust = 0.45, vjust = -6) +
   stat_compare_means(comparisons = my_comparisons, method = "t.test", label = "p.format")
 
+mae_marker <- lm(MAE ~ taxonomy, data = mean_values)
+anova(mae_marker) %>% writexl::write_xlsx(., here::here("data/MAE_tax-marker_anova.xlsx"))
 ```
 
 ```{r, echo=FALSE}
@@ -439,6 +441,14 @@ mae_taxlevel_box <- ggplot(mean_values) +
 #  stat_compare_means(comparisons = my_comparisons, method = "t.test", label = "p.signif")
 # only 16S-ITS Class and order and significantly different
 
+mae_16S_tax_level <- filter(mean_values, taxonomy == "16S") %>% lm(MAE ~ tax_level, data = .)
+anova(mae_16S_tax_level) %>% writexl::write_xlsx(., here::here("data/MAE_16S_taxlevel_anova.xlsx"))
+
+mae_ITS_tax_level <- filter(mean_values, taxonomy == "ITS") %>% lm(MAE ~ tax_level, data = .)
+anova(mae_ITS_tax_level) %>% writexl::write_xlsx(., here::here("data/MAE_ITS_taxlevel_anova.xlsx"))
+
+mae_mixed_tax_level <- filter(mean_values, taxonomy == "16S-ITS") %>% lm(MAE ~ tax_level, data = .)
+anova(mae_mixed_tax_level) %>% writexl::write_xlsx(., here::here("data/MAE_16S-ITS_taxlevel_anova.xlsx"))
 ```
 
 ```{r, echo=FALSE}
