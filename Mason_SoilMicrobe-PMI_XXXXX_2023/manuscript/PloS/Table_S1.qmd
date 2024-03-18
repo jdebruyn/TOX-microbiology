@@ -1,8 +1,9 @@
 ---
-title: "Supplemental Information"
 format: 
   pdf:
     keep-tex: true
+crossref: 
+  tbl-title: 'Table S'
 geometry: 
   - left=0.75in
   - right=0.75in
