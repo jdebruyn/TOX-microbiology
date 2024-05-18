@@ -352,5 +352,3 @@ Summary statics for all random forest models. Values are means for 100 runs of e
 # Acknowledgments
 
 The authors would like to thank the donors and donor families, whose generosity of body donation made this research possible. We would like to acknowledge multiple individuals who helped with design and execution of the field study that supported this work. We would like to acknowledge Mary Davis, Sarah Schwing, Erin Patrick, and Thomas Delgado for preparation of donors prior to study. We would also like to thank Sarah Schwing, Erin Patrick, Katharina Hoeland, and Thomas Delgado for their help collecting daily observations of donors and soil samples used in this study.
-
-This project was supported by the National Institute of Justice (Award No. DOJ-NIJ-2018-DU-BX-018) to DWS and JMD. The opinions, findings, and conclusions or recommendations expressed in this manuscript are those of the authors and do not necessarily reflect those of the Department of Justice.
