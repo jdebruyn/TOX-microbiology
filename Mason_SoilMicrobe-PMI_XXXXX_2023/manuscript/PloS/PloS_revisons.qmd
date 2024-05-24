@@ -348,7 +348,9 @@ This study aimed to assess microbial abundance-based prediction of PMI from soil
 ::: {.supp}
 ## S1 Table. {#s1-table}
 Summary statics for all random forest models. Values are means for 100 runs of each model. OOB MSE = out-of-bag mean squared error, RMSE = root mean squared error, MAE = mean absolute error, OTU = Operational taxonomic unit.
+:::
 
+::: {.supp}
 ## S1 Fig. {#s1-fig}
 Relative abundance of select bacterial orders identified as important features in random forest regressions change over time. Relative abundance of the orders Bacteriodales, Cardiobacteriales, Clostridiales, and Lactobacillales change over time, here accumulated degree hours (ADH), within decomposition-impacted soils. Trends for each of the 19 individuals (named “TOX\#\#\#”) are delineated by color.}
 :::
