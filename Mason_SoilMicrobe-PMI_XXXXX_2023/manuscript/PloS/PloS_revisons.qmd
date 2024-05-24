@@ -275,7 +275,7 @@ Overall, inclusion of environmental parameters in random forest models to predic
 
 In addition to assessing the predictability of different random forest models, we also looked at important model features to observe which taxa and/or environmental parameters impacted model performance. Here we highlight the top 25 features of best performing 16S (phylum + environmental), 16S-ITS (order), and ITS (order + environmental) models, determined by lowest MAE within the test set. Both 16S and ITS best models included environmental predictors, while the combined 16S-ITS model did not (`Fig~\ref{fig5}`{=latex}A-C). For the 16S phylum model with environmental data, the most important model feature, as assessed by decrease in MSE, was the phylum *Firmicutes*. The remaining important features included soil electrical conductivity (EC), *Acidobacteria*, *Epsilonbacteraeota*, and *Proteobacteria*, respectively. Other features of interest for this model included *Nitrospirae*, leucine aminopeptidase activity, pH, and soil moisture (`Fig~\ref{fig5}`{=latex}A). For the ITS order model with environmental predictors, the most important model features were *Pleosporales*, soil EC, Unclassified fungi, *Rhizophydiales*, Unclassified *Glomeromycota*, Unclassified *Basidiomycota*, and *Auriculariales* (`Fig~\ref{fig5}`{=latex}B). In this model, no other environmental parameters were among the top 25 important features. Other top taxonomic features of interest included *Saccharomycetales* and Unclassified *Sordariomycetes*, as their members are present in the human mycobiome and feces, respectively [@blackwell_fungi_2004; @taylor_ascomycota_2015]. The best performing 16S-ITS model was the order level model without environmental features. Top features for this model were the bacterial order *Lactobacillales* and the fungal order *Pleosporales*. Bacterial orders *Bacteroidales*, *Cardiobacteriales*, and *Clostridiales*  were third, fourth, and eleventh most important features, respectively (`Fig~\ref{fig5}`{=latex}C). The fungal order *Saccharomycetales* was also observed in the top 25. 
 
-Relative abundance of anaerobic bacterial taxa identified in random forest models, including *Firmicutes* (`Fig~\ref{fig6}`{=latex}A) and *Clostridiales* (`Fig~\ref{fig6}`{=latex}C), increased as decomposition progressed. In contrast, relative abundance of the aerobic nitrifying organisms of the phylum *Nitrospirae* decreased (`Fig~\ref{fig6}`{=latex}B). Relative abundance of the bacterial order *Cardiobacteriales* (`Fig~\ref{fig6}`{=latex}D) and fungal order *Pleosporales* (`Fig~\ref{fig7}`{=latex}), identified in the mixed 16S-ITS order model, increased and decreased, respectively, over time.
+Relative abundance of anaerobic bacterial taxa identified in random forest models, including *Firmicutes* (`Fig~\ref{fig6}`{=latex}), *Bacteroidales* ([s1-fig]{.nameref}), *Clostridiales* ([s1-fig]{.nameref}) and *Lactobacillales* ([s1-fig]{.nameref}), increased as decomposition progressed. In contrast, relative abundance of the aerobic nitrifying organisms of the phylum *Nitrospirae* decreased (`Fig~\ref{fig6}`{=latex}). *Acidobacteria*, among the top phyla in the 16S model, decreased in relative abundance during decomposition (`Fig~\ref{fig6}`{=latex}). Relative abundance of the bacterial order *Cardiobacteriales* ([s1-fig]{.nameref}) and fungal order *Pleosporales* (`Fig~\ref{fig7}`{=latex}), identified in the mixed 16S-ITS order model, increased and decreased, respectively, over time.
 
 ```{=tex}
 % Place figure captions after the first paragraph in which they are cited.
@@ -287,7 +287,7 @@ For each biological marker, top models included 16S phylum + environmental data 
 
 \begin{figure}[!h]
 \caption{{\bf Relative abundance of select bacterial taxa identified as important features in random forest regressions.}
-Relative abundance of the phyla Firmicutes (A) and Nitrospirae (B) and orders Clostridiales (C) and Cardiobacteriales (D) change over time, here accumulated degree hours (ADH), within decomposition-impacted soils. Trends for each of the 19 individuals (named “TOX\#\#\#”) are delineated by color.}
+Relative abundance of the phyla Acidobacteria, Firmicutes, Nitrospirae, and Proteobacteria change over time, here accumulated degree hours (ADH), within decomposition-impacted soils. Trends for each of the 19 individuals (named “TOX\#\#\#”) are delineated by color.}
 \label{fig6}
 \end{figure}
 
@@ -346,8 +346,11 @@ This study aimed to assess microbial abundance-based prediction of PMI from soil
 # Supporting information
 
 ::: {.supp}
-## Table S1. {#s1-table}
+## S1 Table. {#s1-table}
 Summary statics for all random forest models. Values are means for 100 runs of each model. OOB MSE = out-of-bag mean squared error, RMSE = root mean squared error, MAE = mean absolute error, OTU = Operational taxonomic unit.
+
+## S1 Fig. {#s1-fig}
+Relative abundance of select bacterial orders identified as important features in random forest regressions change over time. Relative abundance of the orders Bacteriodales, Cardiobacteriales, Clostridiales, and Lactobacillales change over time, here accumulated degree hours (ADH), within decomposition-impacted soils. Trends for each of the 19 individuals (named “TOX\#\#\#”) are delineated by color.}
 :::
 
 # Acknowledgments
