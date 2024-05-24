@@ -563,10 +563,9 @@ bact_phylum_env_top_features <- get_top_25_features(all_rf_results$bact_phylum_e
 
 bact_phylum_env_top_features
 
-taxa <- c("Firmicutes", "Acidobacteria", "Proteobacteria", "Nitrospirae")
+phyla_taxa <- c("Firmicutes", "Acidobacteria", "Proteobacteria", "Nitrospirae")
 
-taxa_otus <- bact_phylum_env_top_features$names[which(bact_phylum_env_top_features$tax %in% taxa)]
-
+phyla_taxa_otus <- bact_phylum_env_top_features$names[which(bact_phylum_env_top_features$tax %in% taxa)]
 
 
 ######################################
@@ -618,7 +617,7 @@ phylum_abundance <- moth_decomp_5000 %>%
   tax_glom(taxrank = "Phylum") %>%
   transform_sample_counts(function(x) {x / sum(x)}) %>%
   psmelt() %>%
-  filter(Phylum %in% taxa) %>%
+  filter(Phylum %in% phylum_taxa) %>%
   select(Donor, ADH, ADH_10_actual, OTU, Phylum, Abundance) 
   # %>%
   # pivot_wider(names_from = OTU, values_from = Abundance)
@@ -751,4 +750,48 @@ pleo_plot + labs(title = "*Pleosporales* relative abundance")
 ```{r, include=FALSE, eval=FALSE}
 tiff(here::here("figures/Fig7.tiff"), units = "in", width = 4.5, height = 3.5, res = 300)
 pleo_plot
+```
+
+```{r, include = FALSE}
+order_taxa <- c("Lactobacillales", "Bacteroidales", "Cardiobacteriales", "Clostridiales")
+
+order_abundance <- moth_decomp_5000 %>%
+  tax_glom(taxrank = "Order") %>%
+  transform_sample_counts(function(x) {x / sum(x)}) %>%
+  psmelt() %>%
+  filter(Order %in% order_taxa) %>%
+  select(Donor, ADH, ADH_10_actual, OTU, Order, Abundance) 
+  # %>%
+  # pivot_wider(names_from = OTU, values_from = Abundance)
+
+order_plot <- order_abundance %>%
+  ggplot() +
+  aes(x = ADH_10_actual, y = Abundance, color = Donor) +
+  geom_point() +
+  # geom_line(na.rm = TRUE) +
+  scale_color_manual(values = colpalette2) +
+  labs(x = "Accumulated Degree Hours",
+       y = "Relative Abundance") +
+  theme_bw() +
+  theme(strip.text = element_text(face = "italic")) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_rect(fill = "white")) +
+  theme(legend.position = "bottom",
+        legend.title.position = "top") + 
+  guides(color = guide_legend(override.aes = list(size = 0.5))) +
+  guides(color = guide_legend(ncol = 10, byrow = TRUE))  +
+  theme(legend.title = element_text(size = 8), 
+        legend.text = element_text(size = 8),
+        legend.key.size = unit(0.1, "lines")) +
+  facet_wrap(~ Order, scales = "free_y")
+```
+
+```{r, echo = FALSE}
+order_plot
+```
+
+```{r, include=FALSE, eval=FALSE}
+tiff(here::here("figures/S1Fig.tiff"), units = "in", width = 7.5, height = 5.5, res = 300)
+order_plot
 ```
