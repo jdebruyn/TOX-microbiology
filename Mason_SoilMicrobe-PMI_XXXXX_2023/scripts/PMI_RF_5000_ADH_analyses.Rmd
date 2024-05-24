@@ -226,7 +226,7 @@ mod1_train_predictions <- ggplot(data = NULL,
        aes(x = predict(model_1_opt_ranger, all_rf_results[[model_1_idx]]@train_df)$predictions,
            y = all_rf_results[[model_1_idx]]@train_df$ADH_10_actual)) +
   geom_point(size = 1.5) +
-  geom_smooth(method = "lm", col = "red") +
+  geom_smooth(method = "lm", color = 'red') +
   labs(x = "Predicted ADH",
        y = "Actual ADH") +
   theme_bw() +
@@ -248,7 +248,7 @@ mod1_test_predictions <- ggplot(data = NULL,
        aes(x = predict(model_1_opt_ranger, all_rf_results[[model_1_idx]]@test_df)$predictions,
            y = all_rf_results[[model_1_idx]]@test_df$ADH_10_actual)) +
   geom_point(size = 1.5) +
-  geom_smooth(method = "lm", col = "blue") +
+  geom_smooth(method = "lm", color = 'blue') +
   labs(x = "Predicted ADH",
        y = "Actual ADH") +
   theme_bw() +
@@ -280,7 +280,7 @@ mod2_train_predictions <- ggplot(data = NULL,
        aes(x = predict(model_2_opt_ranger, all_rf_results[[model_2_idx]]@train_df)$predictions,
            y = all_rf_results[[model_2_idx]]@train_df$ADH_10_actual)) +
   geom_point(size = 1.5) +
-  geom_smooth(method = "lm", col = "red") +
+  geom_smooth(method = "lm", color = 'red') +
   labs(x = "Predicted ADH",
        y = "Actual ADH") +
   theme_bw() +
@@ -302,7 +302,7 @@ mod2_test_predictions <- ggplot(data = NULL,
        aes(x = predict(model_2_opt_ranger, all_rf_results[[model_2_idx]]@test_df)$predictions,
            y = all_rf_results[[model_2_idx]]@test_df$ADH_10_actual)) +
   geom_point(size = 1.5) +
-  geom_smooth(method = "lm", col = "blue") +
+  geom_smooth(method = "lm", color = 'blue') +
   labs(x = "Predicted ADH",
        y = "Actual ADH") +
   theme_bw() +
@@ -335,7 +335,7 @@ mod3_train_predictions <- ggplot(data = NULL,
        aes(x = predict(model_3_opt_ranger, all_rf_results[[model_3_idx]]@train_df)$predictions,
            y = all_rf_results[[model_3_idx]]@train_df$ADH_10_actual)) +
   geom_point(size = 1.5) +
-  geom_smooth(method = "lm", col = "red") +
+  geom_smooth(method = "lm", color = "red") +
   labs(x = "Predicted ADH",
        y = "Actual ADH") +
   theme_bw() +
@@ -358,7 +358,7 @@ mod3_test_predictions <- ggplot(data = NULL,
        aes(x = predict(model_3_opt_ranger, all_rf_results[[model_3_idx]]@test_df)$predictions,
            y = all_rf_results[[model_3_idx]]@test_df$ADH_10_actual)) +
   geom_point(size = 1.5) +
-  geom_smooth(method = "lm", col = "blue") +
+  geom_smooth(method = "lm", color = 'blue') +
   labs(x = "Predicted ADH",
        y = "Actual ADH") +
   theme_bw() +
@@ -372,19 +372,43 @@ mod3_test_predictions <- ggplot(data = NULL,
                  " Slope = ", signif(mod3_test_predictions_lm$coefficients[[2]], 3),
                  " P = ", signif(summary(mod3_test_predictions_lm)$coefficients[2, 4], 3)),
            size = 2)
+
+# ggarrange(mod3_train_predictions, mod3_test_predictions, legend.grob = dataset_legend)
 ```
 
 
 ```{r, echo=FALSE, message=FALSE}
-plot_grid(mod1_train_predictions, mod2_train_predictions, mod3_train_predictions, mod1_test_predictions, mod2_test_predictions, mod3_test_predictions, 
+# plot_grid(mod1_train_predictions, mod2_train_predictions, mod3_train_predictions, mod1_test_predictions, mod2_test_predictions, mod3_test_predictions, 
+#           nrow = 2,
+#           labels = c("A", "B", "C", "D", "E", "F"))
+dataset <- data.frame(dataset = c("Train", "Test", "Train", "Test"), 
+           val = c(2, 3, 5, 2))
+dataset$dataset <- as.factor(dataset$dataset)
+t <- ggplot(dataset) +
+  aes(x = val, y = dataset, color = dataset) +
+  scale_color_manual(values = c("Train" = 'red', "Test" = 'blue'),
+                     drop = FALSE) +
+  geom_point() +
+  labs(color = "Data set") +
+  theme(legend.position = "top")
+dataset_legend <- get_legend(t)
+
+ggarrange(mod1_train_predictions, mod2_train_predictions, mod3_train_predictions, mod1_test_predictions, mod2_test_predictions, mod3_test_predictions,
           nrow = 2,
-          labels = c("A", "B", "C", "D", "E", "F"))
+          ncol = 3,
+          labels = c("A", "B", "C", "D", "E", "F"),
+          legend.grob = dataset_legend,
+          legend = "top") 
 ```
+
 ```{r, include=FALSE, eval=FALSE}
 tiff(here::here("figures/Fig2.tiff"), units = "in", width = 7.5, height = 5.5, res = 300)
-plot_grid(mod1_train_predictions, mod2_train_predictions, mod3_train_predictions, mod1_test_predictions, mod2_test_predictions, mod3_test_predictions, 
+ggarrange(mod1_train_predictions, mod2_train_predictions, mod3_train_predictions, mod1_test_predictions, mod2_test_predictions, mod3_test_predictions,
           nrow = 2,
-          labels = c("A", "B", "C", "D", "E", "F"))
+          ncol = 3,
+          labels = c("A", "B", "C", "D", "E", "F"),
+          legend.grob = dataset_legend,
+          legend = "top") 
 ```
 
 ## MAE ~ biological marker
