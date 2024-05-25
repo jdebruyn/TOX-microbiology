@@ -100,6 +100,8 @@ mae_barplot <- mean_values %>%
   theme_bw() +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust=1),
+        legend.position = "bottom",
         strip.background = element_rect(fill = "white"))
 
 ```
@@ -414,21 +416,31 @@ ggarrange(mod1_train_predictions, mod2_train_predictions, mod3_train_predictions
 ## MAE ~ biological marker
 
 ```{r, include=FALSE}
+mae_marker <- lm(MAE ~ taxonomy, data = mean_values)
+mae_marker_anova_p <- anova(mae_marker)
+mae_marker_anova_p$`Pr(>F)`[1]
+
 my_comparisons <- list( c("16S", "16S-ITS"), c("16S", "ITS"), c("16S-ITS", "ITS"))
 
+tax_colors <- c("#395D9CFF", "#3497A9FF", "#60CEACFF")
+names(tax_colors) <- c("16S", "16S-ITS", "ITS")
+
 mae_marker_box <- ggplot(mean_values) +
-  aes(x = taxonomy, y = MAE, fill = "indianred") +
+  aes(x = taxonomy, y = MAE, fill = taxonomy) +
   geom_boxplot() +
   labs(x = "Biological Marker",
        y = "Average Mean Absolute Error (MAE)") +
+  scale_fill_manual(values = tax_colors, guide = "none") +
   theme_bw() +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank()) +
-  scale_fill_discrete(guide = "none") +
-  stat_compare_means(method = "anova", hjust = 0.45, vjust = -6) +
-  stat_compare_means(comparisons = my_comparisons, method = "t.test", label = "p.format")
+  stat_compare_means(comparisons = my_comparisons, method = "t.test", label = "p.format", label.y = c(1010, 1025, 1050)) +
+  annotate("text",
+           x = 1,
+           y = 1070,
+           label = paste0("ANOVA p = ", round(mae_marker_anova_p$`Pr(>F)`[1], 4)),
+           size = 3) 
 
-mae_marker <- lm(MAE ~ taxonomy, data = mean_values)
 anova(mae_marker) %>% writexl::write_xlsx(., here::here("data/MAE_tax-marker_anova.xlsx"))
 ```
 
@@ -440,6 +452,7 @@ mae_marker_box
 ```{r, include=FALSE, eval=FALSE}
 tiff(here::here("figures/Fig3.tiff"), units = "in", width = 4, height = 4, res = 300)
 mae_marker_box
+dev.off()
 ```
 
 
