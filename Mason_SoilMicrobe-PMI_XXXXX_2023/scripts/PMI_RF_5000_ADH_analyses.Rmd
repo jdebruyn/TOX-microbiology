@@ -459,10 +459,30 @@ dev.off()
 ## MAE ~ taxonomic level
 
 ```{r, include=FALSE}
+mae_16S_tax_level <- filter(mean_values, taxonomy == "16S") %>% lm(MAE ~ tax_level, data = .)
+anova(mae_16S_tax_level)$`Pr(>F)`[1]
+
+mae_ITS_tax_level <- filter(mean_values, taxonomy == "ITS") %>% lm(MAE ~ tax_level, data = .)
+anova(mae_ITS_tax_level)$`Pr(>F)`[1]
+
+mae_mixed_tax_level <- filter(mean_values, taxonomy == "16S-ITS") %>% lm(MAE ~ tax_level, data = .)
+anova(mae_mixed_tax_level)$`Pr(>F)`[1]
+
+anova_dat <- data.frame(text = c(paste0("ANOVA p = ", round(anova(mae_16S_tax_level)$`Pr(>F)`[1], 3)),
+                                 paste0("ANOVA p = ", round(anova(mae_mixed_tax_level)$`Pr(>F)`[1], 3)),
+                                 paste0("ANOVA p = ", round(anova(mae_ITS_tax_level)$`Pr(>F)`[1], 3))),
+                        taxonomy = c("16S", "16S-ITS", "ITS"),
+                        y = c(1000, 1000, 1000)
+                        )
+
 my_comparisons <- list( c("Phylum", "Class"), c("Phylum", "Order"), c("Phylum", "OTU"), c("Class","Order"),c("Class","OTU"), c("Order","OTU") )
 
+tax_colors <- c("#395D9CFF", "#3497A9FF", "#60CEACFF")
+names(tax_colors) <- c("16S", "16S-ITS", "ITS")
+
+
 mae_taxlevel_box <- ggplot(mean_values) +
-  aes(x = factor(tax_level, ordered = TRUE, levels = c("Phylum", "Class", "Order", "OTU")), y = MAE, fill = "indianred") +
+  aes(x = factor(tax_level, ordered = TRUE, levels = c("Phylum", "Class", "Order", "OTU")), y = MAE, fill = taxonomy) +
   geom_boxplot() +
   labs(x = "Taxonomic Level",
        y = "Average Mean Absolute\n Error (MAE)") +
@@ -471,11 +491,15 @@ mae_taxlevel_box <- ggplot(mean_values) +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         strip.background = element_rect(fill = "white")) +
-  scale_fill_discrete(guide = "none") +
-  stat_compare_means(method = "anova", label.x.npc = "center", hjust = 0.38, vjust = .2)
+  scale_fill_manual(values = tax_colors, guide = "none") +
+  geom_text(data = anova_dat,
+            mapping = aes(x = 4, y = Inf, label = text, size = 12),
+            hjust = 0.7,
+            vjust = 2,
+            size.unit = "pt") +
+  scale_size(guide = 'none')
+  
 
-#+
-#  stat_compare_means(comparisons = my_comparisons, method = "t.test", label = "p.signif")
 # only 16S-ITS Class and order and significantly different
 
 mae_16S_tax_level <- filter(mean_values, taxonomy == "16S") %>% lm(MAE ~ tax_level, data = .)
@@ -494,8 +518,9 @@ mae_taxlevel_box
 
 
 ```{r, include=FALSE, eval=FALSE}
-tiff(here::here("figures/Fig4.tiff"), units = "in", width = 5.5, height = 3.5, res = 300)
+tiff(here::here("figures/Fig4.tiff"), units = "in", width = 6, height = 3.5, res = 300)
 mae_taxlevel_box
+dev.off()
 ```
 
 ## Model Features
