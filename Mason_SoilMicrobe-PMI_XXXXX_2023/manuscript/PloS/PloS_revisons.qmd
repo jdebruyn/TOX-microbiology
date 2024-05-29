@@ -253,7 +253,7 @@ Some variation was observed in MAE due to taxonomic level considered for model d
 % Place figure captions after the first paragraph in which they are cited.
 \begin{figure}[!h]
 \caption{{\bf Mean absolute error (MAE) does not vary as a result of taxonomic level (color) used for model construction for any of the biological markers assessed (column).}
-Mean MAE is the result of 100 iterations of the 24 respective models against the testing set. Order level model (green) generally had the lowest MAE, compared to phylum (purple), class (blue), and OTU (yellow) models. ANOVA p-values are the result of linear models comparing mean MAE to taxonomic level.}
+Mean MAE is the result of 100 iterations of the 24 respective models against the testing set. Order level model generally had the lowest MAE, compared to phylum, class, and OTU models. ANOVA p-values are the result of linear models comparing mean MAE to taxonomic level.}
 \label{fig4}
 \end{figure}
 
