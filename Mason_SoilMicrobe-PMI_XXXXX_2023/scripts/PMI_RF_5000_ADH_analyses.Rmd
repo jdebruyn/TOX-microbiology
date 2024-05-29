@@ -562,6 +562,7 @@ get_top_25_features <- function(optimal_model, tax_table, tax_level) {
 
 
 plot_top_25_features <- function(top_25_df) {
+  top_25_df$predictor_type <- factor(top_25_df$predictor_type, levels = c("16S", "ITS", "Environmental"))
   
   colors <- brewer.pal(3, "Dark2")
   types <- factor(x = c("16S", "ITS", "Environmental"), levels = c("16S", "ITS", "Environmental"))
@@ -570,21 +571,21 @@ plot_top_25_features <- function(top_25_df) {
 
   top_25_plot <- top_25_df %>%
     ggplot(aes(reorder(predictor, x), x, fill = predictor_type)) +
-    geom_col() +
+    geom_col(show.legend = T) +
     coord_flip() + 
-    scale_fill_manual(name = "types", values = colors) +
+    scale_fill_manual(values = c("16S" = "#1B9E77", "ITS" = "#D95F02", "Environmental" = "#7570B3"), drop = FALSE) +
     scale_y_continuous(labels = function(x) format(x, scientific = TRUE),
                        expand = expansion(mult = c(0,0))) +
     labs(y = "variance in responses",
-         x = "Predictor") +
+         x = "Predictor",
+         fill = "Predictor type") +
     theme_bw() +
     theme(panel.grid.major = element_blank(),
           panel.grid.minor = element_blank(),
           axis.text.y = element_text(size = 6),
           axis.title.x = element_text(size = 10),
           axis.title.y = element_text(size = 10),
-          aspect.ratio = 1.9/2,
-          legend.position = "none")
+          aspect.ratio = 1.9/2)
 
   top_25_plot
 }
@@ -608,13 +609,14 @@ top_its_mod_features <- get_top_25_features(model_3_opt_ranger, its_order_tax_ta
 ```
 
 ```{r, echo=FALSE}
-ggarrange(top_bact_mod_features, top_its_mod_features, top_bact_ITS_mod_features,  nrow = 2, ncol = 2, labels = c("A", "B", "C"), align = "v")
+ggarrange(top_bact_mod_features, top_its_mod_features, top_bact_ITS_mod_features,  nrow = 2, ncol = 2, labels = c("A", "B", "C"), align = "v", common.legend = TRUE)
 ```
 
 
 ```{r, include=FALSE, eval=FALSE}
 tiff(here::here("figures/Fig5.tiff"), units = "in", width = 7.5, height = 5.5, res = 300)
-ggarrange(top_bact_mod_features, top_its_mod_features, top_bact_ITS_mod_features, nrow = 2, ncol = 2, labels = c("A", "B", "C"), align = "v")
+ggarrange(top_bact_mod_features, top_its_mod_features, top_bact_ITS_mod_features, nrow = 2, ncol = 2, labels = c("A", "B", "C"), align = "v", common.legend = TRUE)
+dev.off()
 ```
 
 
