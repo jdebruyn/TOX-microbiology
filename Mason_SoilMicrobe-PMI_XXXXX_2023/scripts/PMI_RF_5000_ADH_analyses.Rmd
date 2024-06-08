@@ -30,7 +30,7 @@ colpalette2= c("khaki3","steelblue3","orange","chocolate","aquamarine4","plum3",
 ## Load the data
 ```{r, include = FALSE}
 #load the datasets:
-all_rf_results = readRDS(here("data/all_rf_results.RDS"))
+all_rf_results = readRDS(here("Mason_SoilMicrobe-PMI_XXXXX_2023/data/all_rf_results.RDS"))
 ```
 
 ```{r, include=FALSE}
@@ -448,6 +448,16 @@ anova(mae_marker) %>% writexl::write_xlsx(., here::here("data/MAE_tax-marker_ano
 mae_marker_box
 ```
 
+```{r, include=FALSE}
+rownames(mae_marker_anova_p)[1] <- "biologicalMarker"
+kbl(mae_marker_anova_p,
+    format = "latex",
+    row.names = TRUE,
+    # caption = "Model mean absoulte error (MAE) varies due to biological marker as reported by analysis of Variance (ANOVA). Model parameter biologicalMarker refers whether 16S, ITS, or both organisms were used in model construction.",
+    digits = 3,
+    booktabs = TRUE) %>% 
+save_kable(here::here("figures/MAE_biologicalMarker_anova.pdf"), keep_tex = FALSE)
+```
 
 ```{r, include=FALSE, eval=FALSE}
 tiff(here::here("figures/Fig3.tiff"), units = "in", width = 4, height = 4, res = 300)
