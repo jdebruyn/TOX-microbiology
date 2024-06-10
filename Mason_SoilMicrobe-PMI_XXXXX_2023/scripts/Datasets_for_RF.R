@@ -50,6 +50,24 @@ rownames(map)=map$group #assign rownames to be group
 levels=c("TOX001CON", "TOX001", "TOX001_1500", "TOX001_3000", "TOX001_4500", "TOX001_8000", "TOX001_11500", "TOX001_15500","TOX001DF", "TOX002CON", "TOX002", "TOX002_1500A", "TOX002_1500B", "TOX002_2750", "TOX002_3750","TOX002DF", "TOX003CON", "TOX003", "TOX003_1500", "TOX003_3000", "TOX003_4500","TOX003DF", "TOX004CON", "TOX004", "TOX004_1500", "TOX004_3000", "TOX004_3500","TOX004DF", "TOX005CON", "TOX005", "TOX005_1500", "TOX005_3000", "TOX005_4500", "TOX005_6500", "TOX005_8500","TOX005DF", "TOX006CON", "TOX006", "TOX006_1500", "TOX006_3000", "TOX006_4500","TOX006DF", "TOX007CON", "TOX007", "TOX007_1500", "TOX007_3000", "TOX007_4500", "TOX007_6000","TOX007DF", "TOX008CON", "TOX008", "TOX008_1500", "TOX008_3000", "TOX008_4500", "TOX008_6500","TOX008DF", "TOX009CON", "TOX009", "TOX009_1500", "TOX009_3000", "TOX009_4500","TOX009DF", "TOX010CON", "TOX010", "TOX010_1500", "TOX010_2500", "TOX010_4500", "TOX010_9000", "TOX010_13000", "TOX010_17500", "TOX010DF", "TOX011CON", "TOX011", "TOX011_1500", "TOX011_3000", "TOX011_3500", "TOX011_5500", "TOX011_7000", "TOX012CON", "TOX012", "TOX012_1500", "TOX012_3000", "TOX012_4000", "TOX012_6000","TOX012DF", "TOX013CON", "TOX013", "TOX013_1500", "TOX013_3000", "TOX013_4000", "TOX013_7500", "TOX013DF","TOX015CON","TOX015","TOX015_250","TOX015_500","TOX015_1000","TOX015_1500", "TOX016CON","TOX016","TOX016_500","TOX016_1000","TOX016_1500","TOX016DF","TOX017CON","TOX017","TOX017_1500","TOX017_3000","TOX017_4500","TOX017_8500","TOX017_13000","TOX017_18500","TOX017DF","TOX018CON","TOX018","TOX018_1500","TOX018_2000","TOX018_3000","TOX018_4000", "TOX019CON","TOX019","TOX019_1500","TOX019_3000","TOX019_3500","TOX019_4500","TOX019_5500","TOX019DF","TOX020CON","TOX020","TOX020_1500","TOX020_3500","TOX020_4500","TOX020_6000","TOX020DF")
 map$group=ordered(map$group, levels=levels)
 
+######################################
+###   Where do we cut off ADH?     ###
+######################################
+
+dist <- metadata %>%
+  filter(Trt == "donor") %>%
+  ggplot() +
+  aes(y = Donor, x = ADH_10_actual) +
+  geom_point() +
+  geom_vline(xintercept = 5000, linetype="dotted", 
+                color = "blue", size=1.5) +
+  labs(x =  bquote(paste("ADH (base 10", degree, " C)"))) +
+  theme_bw()
+  
+tiff(here::here("Mason_SoilMicrobe-PMI_XXXXX_2023/figures/samples_by_donor_5000ADH.tiff"), units = "in", width = 7.5, height = 5.5, res = 300)
+dist
+dev.off()
+
 
 #####################################################
 #### obtain 16S OTU tables from phyloseq object #####
@@ -74,6 +92,14 @@ bact_phylo_n=prune_taxa(taxa_sums(bact_phylo_n) > 10, bact_phylo_n)#remove norma
 #note went from 50,720 taxa to 5,195 taxa
 bact_phylo_n_5000 = subset_samples(bact_phylo_n, ADH <= 5000)
 
+# average samples per donor
+isS4(bact_phylo_n_5000)
+
+sample_data(bact_phylo_n_5000) %>%
+  data.frame()%>%
+  count(Donor) %>%
+  summarise(mean_timepoints = mean(n)) %>%
+  pull(mean_timepoints)
   
 bact_OTU_n=as(otu_table(bact_phylo_n), "matrix")
 if(taxa_are_rows(bact_phylo_n)){bact_OTU_n=t(bact_OTU_n)}
