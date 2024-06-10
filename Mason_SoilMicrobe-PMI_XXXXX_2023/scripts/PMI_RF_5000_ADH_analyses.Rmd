@@ -474,6 +474,13 @@ dev.off()
 ## MAE ~ taxonomic level
 
 ```{r, include=FALSE}
+anova(lm(MAE ~ tax_level*taxonomy, data = mean_values))
+ggplot(mean_values) +
+  aes(y = MAE, x = factor(tax_level, ordered = TRUE, levels = c("Phylum", "Class", "Order", "OTU")), color = taxonomy, group = taxonomy) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_bw()
+
 mae_16S_tax_level <- filter(mean_values, taxonomy == "16S") %>% lm(MAE ~ tax_level, data = .)
 anova(mae_16S_tax_level)$`Pr(>F)`[1]
 
@@ -490,19 +497,6 @@ anova_dat <- data.frame(text = c(paste("ANOVA~italic('p')~`=`", round(anova(mae_
                         y = c(1000, 1000, 1000)
                         )
 
-# bquote(paste("ANOVA ", italic("p"), " = ", .(round(anova(mae_16S_tax_level)$`Pr(>F)`, 3)[1]))),
-#                                  bquote(paste("ANOVA ", italic("p"), " `=` ", .(round(anova(mae_mixed_tax_level)$`Pr(>F)`, 3)[1]))),
-#                                  bquote(paste("ANOVA ", italic("p"), " = ", .(round(anova(mae_ITS_tax_level)$`Pr(>F)`, 3)[1])))
-
-# paste("ANOVA~italic('p')~=~", round(anova(mae_16S_tax_level)$`Pr(>F)`, 3)[1])
-
-# bquote(paste("ANOVA ", italic("p"), " = ", .(round(mae_marker_anova_p$`Pr(>F)`[1], 4))))
-
-# bquote(ANOVA .(italic("p") = .(round(anova(mae_16S_tax_level)$`Pr(>F)`[1], 3))))
-
-# bquote(paste("ANOVA ", italic("p"), " = ", .(round(anova(mae_16S_tax_level)$`Pr(>F)`, 3)[1])))
-# bquote(paste("ANOVA ", italic("p"), " = ", .(round(anova(mae_16S_tax_level)$`Pr(>F)`, 3)[1])))
-
 my_comparisons <- list( c("Phylum", "Class"), c("Phylum", "Order"), c("Phylum", "OTU"), c("Class","Order"),c("Class","OTU"), c("Order","OTU") )
 
 tax_colors <- c("#395D9CFF", "#3497A9FF", "#60CEACFF")
@@ -511,6 +505,7 @@ names(tax_colors) <- c("16S", "16S-ITS", "ITS")
 
 mae_taxlevel_box <- ggplot(mean_values) +
   aes(x = factor(tax_level, ordered = TRUE, levels = c("Phylum", "Class", "Order", "OTU")), y = MAE, fill = taxonomy) +
+  geom_point() +
   geom_boxplot() +
   labs(x = "Taxonomic Level",
        y = "Average Mean Absolute\n Error (MAE)") +
@@ -530,15 +525,24 @@ mae_taxlevel_box <- ggplot(mean_values) +
   
 
 # only 16S-ITS Class and order and significantly different
-
 mae_16S_tax_level <- filter(mean_values, taxonomy == "16S") %>% lm(MAE ~ tax_level, data = .)
 anova(mae_16S_tax_level) %>% writexl::write_xlsx(., here::here("data/MAE_16S_taxlevel_anova.xlsx"))
+mean_values$tax_level <- factor(mean_values$tax_level, ordered = TRUE, levels = c("Phylum", "Class", "Order", "OTU"))
+pairwise.t.test(mean_values[mean_values$taxonomy == "16S" , "MAE"], mean_values[mean_values$taxonomy == "16S" , "tax_level"], p.p.adjust.method = "none")
+
+diff(range(mean_values[mean_values$taxonomy == "16S" , "MAE"]))
 
 mae_ITS_tax_level <- filter(mean_values, taxonomy == "ITS") %>% lm(MAE ~ tax_level, data = .)
 anova(mae_ITS_tax_level) %>% writexl::write_xlsx(., here::here("data/MAE_ITS_taxlevel_anova.xlsx"))
+pairwise.t.test(mean_values[mean_values$taxonomy == "ITS" , "MAE"], mean_values[mean_values$taxonomy == "ITS" , "tax_level"], p.p.adjust.method = "none")
+
+diff(range(mean_values[mean_values$taxonomy == "ITS" , "MAE"]))
 
 mae_mixed_tax_level <- filter(mean_values, taxonomy == "16S-ITS") %>% lm(MAE ~ tax_level, data = .)
 anova(mae_mixed_tax_level) %>% writexl::write_xlsx(., here::here("data/MAE_16S-ITS_taxlevel_anova.xlsx"))
+pairwise.t.test(mean_values[mean_values$taxonomy == "16S-ITS" , "MAE"], mean_values[mean_values$taxonomy == "16S-ITS" , "tax_level"], p.p.adjust.method = "none")
+
+diff(range(mean_values[mean_values$taxonomy == "16S-ITS" , "MAE"]))
 ```
 
 ```{r, echo=FALSE}
@@ -621,13 +625,13 @@ plot_top_25_features <- function(top_25_df) {
 ```
 
 ```{r, include=FALSE, warning=FALSE}
-bact_phylum_tax_table <- read_excel(here("data/TOX2_16S_TSS_Phylum_taxtable.xlsx"))
+bact_phylum_tax_table <- read_excel(here("Mason_SoilMicrobe-PMI_XXXXX_2023/data/TOX2_16S_TSS_Phylum_taxtable.xlsx"))
 top_bact_mod_features <- get_top_25_features(model_1_opt_ranger, bact_phylum_tax_table, "Phylum") |>
   plot_top_25_features()
 
 
-bact_order_tax_table <- read_excel(here("data/TOX2_16S_TSS_Order_taxtable.xlsx"))
-its_order_tax_table <- read_excel(here("data/TOX2_ITS_TSS_Order_taxtable.xlsx"))
+bact_order_tax_table <- read_excel(here("Mason_SoilMicrobe-PMI_XXXXX_2023/data/TOX2_16S_TSS_Order_taxtable.xlsx"))
+its_order_tax_table <- read_excel(here("Mason_SoilMicrobe-PMI_XXXXX_2023/data/TOX2_ITS_TSS_Order_taxtable.xlsx"))
 
 combined_order_tax_table <- bind_rows(bact_order_tax_table, its_order_tax_table)
 top_bact_ITS_mod_features <- get_top_25_features(model_2_opt_ranger, combined_order_tax_table, "Order") |>
@@ -658,13 +662,13 @@ bact_phylum_env_top_features
 
 phyla_taxa <- c("Firmicutes", "Acidobacteria", "Proteobacteria", "Nitrospirae")
 
-phyla_taxa_otus <- bact_phylum_env_top_features$names[which(bact_phylum_env_top_features$tax %in% taxa)]
+phyla_taxa_otus <- bact_phylum_env_top_features$names[which(bact_phylum_env_top_features$tax %in% phyla_taxa)]
 
 
 ######################################
 ######## load metadata ###############
 ######################################
-treatments <- read_excel(here("../Mason_SoilMicrobialEcology-Decomp-BMI_mSphere_2022/treatments_pub.xlsx"))
+treatments <- read_excel(here("Mason_SoilMicrobialEcology-Decomp-BMI_mSphere_2022/treatments_pub.xlsx"))
 treatments$ADH=as.numeric(treatments$ADH)
 treatments$Type=as.factor(treatments$Type)
 treatments$Trt=as.factor(treatments$Trt)
@@ -675,7 +679,7 @@ treatments$Sector=as.factor(treatments$Sector)
 treatments$Sex=as.factor(treatments$Sex)
 treatments$BMI_level = factor(treatments$BMI_level, ordered = TRUE, levels = c("Underweight","Normal","Overweight","Obese"))
 
-TOXdata = read_excel(here("../Mason_SoilMicrobialEcology-Decomp-BMI_mSphere_2022/TOX_data_all_pub.xlsx"), sheet = "Data")
+TOXdata = read_excel(here("Mason_SoilMicrobialEcology-Decomp-BMI_mSphere_2022/TOX_data_all_pub.xlsx"), sheet = "Data")
 
 TOXdata = TOXdata %>% select("Sample","Temperature","ADH_10_actual", "Gravimetric Moisture","pH","pH_LRR","EC","EC_LRR","BG_avg","BG_LRR","NAG_avg","NAG_LRR","PHOS_avg","PHOS_LRR","LAP_avg", "LAP_LRR","Evolved_CO2","LRR_resp")
 
@@ -695,7 +699,7 @@ map$group=ordered(map$group, levels=levels)
 #####################################################
 #### obtain 16S OTU tables from phyloseq object #####
 ######################################################
-mothur_16S_data = import_mothur(mothur_shared_file = here("../Mason_SoilMicrobialEcology-Decomp-BMI_mSphere_2022/TOX2_16S.shared"), mothur_constaxonomy_file = here("../Mason_SoilMicrobialEcology-Decomp-BMI_mSphere_2022/TOX2_16S.taxonomy"))
+mothur_16S_data = import_mothur(mothur_shared_file = here("Mason_SoilMicrobialEcology-Decomp-BMI_mSphere_2022/TOX2_16S.shared"), mothur_constaxonomy_file = here("Mason_SoilMicrobialEcology-Decomp-BMI_mSphere_2022/TOX2_16S.taxonomy"))
 moth_merge = merge_phyloseq(mothur_16S_data, map) #merge mothurdata with the metadata
 colnames(tax_table(moth_merge)) #print column names of tax file
 colnames(tax_table(moth_merge)) = c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus") #rename tax column names
@@ -710,7 +714,7 @@ phylum_abundance <- moth_decomp_5000 %>%
   tax_glom(taxrank = "Phylum") %>%
   transform_sample_counts(function(x) {x / sum(x)}) %>%
   psmelt() %>%
-  filter(Phylum %in% phylum_taxa) %>%
+  filter(Phylum %in% phyla_taxa) %>%
   select(Donor, ADH, ADH_10_actual, OTU, Phylum, Abundance) 
   # %>%
   # pivot_wider(names_from = OTU, values_from = Abundance)
@@ -724,7 +728,7 @@ phylum_plot <- phylum_abundance %>%
   labs(x = "Accumulated Degree Hours",
        y = "Relative Abundance") +
   theme_bw() +
-  theme(strip.text = element_text(face = "italic")) +
+  # theme(strip.text = element_text(face = "italic")) +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         strip.background = element_rect(fill = "white")) +
@@ -744,8 +748,9 @@ phylum_plot
 ```
 
 ```{r, include=FALSE, eval=FALSE}
-tiff(here::here("figures/Fig6.tiff"), units = "in", width = 7.5, height = 5.5, res = 300)
+tiff(here::here("Mason_SoilMicrobe-PMI_XXXXX_2023/figures/Fig6.tiff"), units = "in", width = 7.5, height = 5.5, res = 300)
 phylum_plot
+dev.off()
 ```
 
 ```{r, include=FALSE, warning=FALSE}
@@ -866,7 +871,7 @@ order_plot <- order_abundance %>%
   labs(x = "Accumulated Degree Hours",
        y = "Relative Abundance") +
   theme_bw() +
-  theme(strip.text = element_text(face = "italic")) +
+  # theme(strip.text = element_text(face = "italic")) +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         strip.background = element_rect(fill = "white")) +
@@ -885,6 +890,7 @@ order_plot
 ```
 
 ```{r, include=FALSE, eval=FALSE}
-tiff(here::here("figures/S1Fig.tiff"), units = "in", width = 7.5, height = 5.5, res = 300)
+tiff(here::here("Mason_SoilMicrobe-PMI_XXXXX_2023/figures/S1Fig.tiff"), units = "in", width = 7.5, height = 5.5, res = 300)
 order_plot
+dev.off()
 ```
