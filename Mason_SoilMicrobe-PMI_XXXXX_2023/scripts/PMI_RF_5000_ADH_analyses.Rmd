@@ -483,25 +483,25 @@ anova(mae_ITS_tax_level)$`Pr(>F)`[1]
 mae_mixed_tax_level <- filter(mean_values, taxonomy == "16S-ITS") %>% lm(MAE ~ tax_level, data = .)
 anova(mae_mixed_tax_level)$`Pr(>F)`[1]
 
-anova_dat <- data.frame(text = c(paste("ANOVA~italic('p')~=", round(anova(mae_16S_tax_level)$`Pr(>F)`, 3)[1], sep = "~"),
-                                 paste("ANOVA~italic('p')~=", round(anova(mae_mixed_tax_level)$`Pr(>F)`, 3)[1], sep = "~"),
-                                 paste("ANOVA~italic('p')~=", round(anova(mae_ITS_tax_level)$`Pr(>F)`, 3)[1], sep = "~")),
+anova_dat <- data.frame(text = c(paste("ANOVA~italic('p')~`=`", round(anova(mae_16S_tax_level)$`Pr(>F)`, 3)[1], sep = "~"),
+                                 paste("ANOVA~italic('p')~`=`", round(anova(mae_mixed_tax_level)$`Pr(>F)`, 3)[1], sep = "~"),
+                                 paste("ANOVA~italic('p')~`=`", round(anova(mae_ITS_tax_level)$`Pr(>F)`, 3)[1], sep = "~")),
                         taxonomy = c("16S", "16S-ITS", "ITS"),
                         y = c(1000, 1000, 1000)
                         )
 
-bquote(paste("ANOVA ", italic("p"), " = ", .(round(anova(mae_16S_tax_level)$`Pr(>F)`, 3)[1]))),
-                                 bquote(paste("ANOVA ", italic("p"), " = ", .(round(anova(mae_mixed_tax_level)$`Pr(>F)`, 3)[1]))),
-                                 bquote(paste("ANOVA ", italic("p"), " = ", .(round(anova(mae_ITS_tax_level)$`Pr(>F)`, 3)[1])))
+# bquote(paste("ANOVA ", italic("p"), " = ", .(round(anova(mae_16S_tax_level)$`Pr(>F)`, 3)[1]))),
+#                                  bquote(paste("ANOVA ", italic("p"), " `=` ", .(round(anova(mae_mixed_tax_level)$`Pr(>F)`, 3)[1]))),
+#                                  bquote(paste("ANOVA ", italic("p"), " = ", .(round(anova(mae_ITS_tax_level)$`Pr(>F)`, 3)[1])))
 
-paste("ANOVA~italic('p')~=~", round(anova(mae_16S_tax_level)$`Pr(>F)`, 3)[1])
+# paste("ANOVA~italic('p')~=~", round(anova(mae_16S_tax_level)$`Pr(>F)`, 3)[1])
 
 # bquote(paste("ANOVA ", italic("p"), " = ", .(round(mae_marker_anova_p$`Pr(>F)`[1], 4))))
 
-bquote(ANOVA .(italic("p") = .(round(anova(mae_16S_tax_level)$`Pr(>F)`[1], 3))))
+# bquote(ANOVA .(italic("p") = .(round(anova(mae_16S_tax_level)$`Pr(>F)`[1], 3))))
 
-bquote(paste("ANOVA ", italic("p"), " = ", .(round(anova(mae_16S_tax_level)$`Pr(>F)`, 3)[1])))
-bquote(paste("ANOVA ", italic("p"), " = ", .(round(anova(mae_16S_tax_level)$`Pr(>F)`, 3)[1])))
+# bquote(paste("ANOVA ", italic("p"), " = ", .(round(anova(mae_16S_tax_level)$`Pr(>F)`, 3)[1])))
+# bquote(paste("ANOVA ", italic("p"), " = ", .(round(anova(mae_16S_tax_level)$`Pr(>F)`, 3)[1])))
 
 my_comparisons <- list( c("Phylum", "Class"), c("Phylum", "Order"), c("Phylum", "OTU"), c("Class","Order"),c("Class","OTU"), c("Order","OTU") )
 
@@ -547,7 +547,7 @@ mae_taxlevel_box
 
 
 ```{r, include=FALSE, eval=FALSE}
-tiff(here::here("figures/Fig4.tiff"), units = "in", width = 6, height = 3.5, res = 300)
+tiff(here::here("Mason_SoilMicrobe-PMI_XXXXX_2023/figures/Fig4.tiff"), units = "in", width = 6, height = 3.5, res = 300)
 mae_taxlevel_box
 dev.off()
 ```
