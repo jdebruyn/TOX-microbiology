@@ -228,7 +228,7 @@ mod1_train_predictions <- ggplot(data = NULL,
        aes(x = predict(model_1_opt_ranger, all_rf_results[[model_1_idx]]@train_df)$predictions,
            y = all_rf_results[[model_1_idx]]@train_df$ADH_10_actual)) +
   geom_point(size = 1.5) +
-  geom_smooth(method = "lm", color = 'red') +
+  geom_smooth(method = "lm", linetype = "solid", color = 'red') +
   labs(x = "Predicted ADH",
        y = "Actual ADH") +
   theme_bw() +
@@ -250,7 +250,7 @@ mod1_test_predictions <- ggplot(data = NULL,
        aes(x = predict(model_1_opt_ranger, all_rf_results[[model_1_idx]]@test_df)$predictions,
            y = all_rf_results[[model_1_idx]]@test_df$ADH_10_actual)) +
   geom_point(size = 1.5) +
-  geom_smooth(method = "lm", color = 'blue') +
+  geom_smooth(method = "lm", linetype = "dashed", color = 'red') +
   labs(x = "Predicted ADH",
        y = "Actual ADH") +
   theme_bw() +
@@ -282,7 +282,7 @@ mod2_train_predictions <- ggplot(data = NULL,
        aes(x = predict(model_2_opt_ranger, all_rf_results[[model_2_idx]]@train_df)$predictions,
            y = all_rf_results[[model_2_idx]]@train_df$ADH_10_actual)) +
   geom_point(size = 1.5) +
-  geom_smooth(method = "lm", color = 'red') +
+  geom_smooth(method = "lm", linetype = "solid", color = 'blue') +
   labs(x = "Predicted ADH",
        y = "Actual ADH") +
   theme_bw() +
@@ -304,7 +304,7 @@ mod2_test_predictions <- ggplot(data = NULL,
        aes(x = predict(model_2_opt_ranger, all_rf_results[[model_2_idx]]@test_df)$predictions,
            y = all_rf_results[[model_2_idx]]@test_df$ADH_10_actual)) +
   geom_point(size = 1.5) +
-  geom_smooth(method = "lm", color = 'blue') +
+  geom_smooth(method = "lm", linetype = "dashed", color = 'blue') +
   labs(x = "Predicted ADH",
        y = "Actual ADH") +
   theme_bw() +
@@ -337,7 +337,7 @@ mod3_train_predictions <- ggplot(data = NULL,
        aes(x = predict(model_3_opt_ranger, all_rf_results[[model_3_idx]]@train_df)$predictions,
            y = all_rf_results[[model_3_idx]]@train_df$ADH_10_actual)) +
   geom_point(size = 1.5) +
-  geom_smooth(method = "lm", color = "red") +
+  geom_smooth(method = "lm", linetype = "solid", color = "magenta4") +
   labs(x = "Predicted ADH",
        y = "Actual ADH") +
   theme_bw() +
@@ -360,7 +360,7 @@ mod3_test_predictions <- ggplot(data = NULL,
        aes(x = predict(model_3_opt_ranger, all_rf_results[[model_3_idx]]@test_df)$predictions,
            y = all_rf_results[[model_3_idx]]@test_df$ADH_10_actual)) +
   geom_point(size = 1.5) +
-  geom_smooth(method = "lm", color = 'blue') +
+  geom_smooth(method = "lm", linetype = "dashed", color = 'magenta4') +
   labs(x = "Predicted ADH",
        y = "Actual ADH") +
   theme_bw() +
@@ -383,15 +383,19 @@ mod3_test_predictions <- ggplot(data = NULL,
 # plot_grid(mod1_train_predictions, mod2_train_predictions, mod3_train_predictions, mod1_test_predictions, mod2_test_predictions, mod3_test_predictions, 
 #           nrow = 2,
 #           labels = c("A", "B", "C", "D", "E", "F"))
-dataset <- data.frame(dataset = c("Train", "Test", "Train", "Test"), 
-           val = c(2, 3, 5, 2))
+dataset <- data.frame(mod = c(top_mods[1], top_mods[1], top_mods[2], top_mods[2], top_mods[3], top_mods[3]),
+           dataset = c("Train", "Test", "Train", "Test", "Train", "Test"), 
+           val1 = c(2, 3, 5, 2, 3, 5),
+           val2 = c(1:6))
 dataset$dataset <- as.factor(dataset$dataset)
 t <- ggplot(dataset) +
-  aes(x = val, y = dataset, color = dataset) +
-  scale_color_manual(values = c("Train" = 'red', "Test" = 'blue'),
-                     drop = FALSE) +
-  geom_point() +
-  labs(color = "Data set") +
+  aes(x = val1, y = val2, linetype = dataset) +
+  geom_point(aes(color = mod)) +
+  scale_color_manual(values = c("bact_phylum_env" = 'red', "bact_ITS_order_noenv" = 'blue', "ITS_order_env" = "magenta4"), drop = FALSE) +
+  geom_smooth(method = "lm", color = "black") +
+  labs(color = "Model",
+       linetype = "Data set") +
+  theme_bw() +
   theme(legend.position = "top")
 dataset_legend <- get_legend(t)
 
@@ -404,13 +408,14 @@ ggarrange(mod1_train_predictions, mod2_train_predictions, mod3_train_predictions
 ```
 
 ```{r, include=FALSE, eval=FALSE}
-tiff(here::here("figures/Fig2.tiff"), units = "in", width = 7.5, height = 5.5, res = 300)
+tiff(here::here("Mason_SoilMicrobe-PMI_XXXXX_2023/figures/Fig2.tiff"), units = "in", width = 7.5, height = 5.5, res = 300)
 ggarrange(mod1_train_predictions, mod2_train_predictions, mod3_train_predictions, mod1_test_predictions, mod2_test_predictions, mod3_test_predictions,
           nrow = 2,
           ncol = 3,
           labels = c("A", "B", "C", "D", "E", "F"),
           legend.grob = dataset_legend,
           legend = "top") 
+dev.off()
 ```
 
 ## MAE ~ biological marker
@@ -438,7 +443,7 @@ mae_marker_box <- ggplot(mean_values) +
   annotate("text",
            x = 1,
            y = 1070,
-           label = paste0("ANOVA p = ", round(mae_marker_anova_p$`Pr(>F)`[1], 4)),
+           label = bquote(paste("ANOVA ", italic("p"), " = ", .(round(mae_marker_anova_p$`Pr(>F)`[1], 4)))),
            size = 3) 
 
 anova(mae_marker) %>% writexl::write_xlsx(., here::here("data/MAE_tax-marker_anova.xlsx"))
@@ -460,7 +465,7 @@ save_kable(here::here("figures/MAE_biologicalMarker_anova.pdf"), keep_tex = FALS
 ```
 
 ```{r, include=FALSE, eval=FALSE}
-tiff(here::here("figures/Fig3.tiff"), units = "in", width = 4, height = 4, res = 300)
+tiff(here::here("Mason_SoilMicrobe-PMI_XXXXX_2023/figures/Fig3.tiff"), units = "in", width = 4, height = 4, res = 300)
 mae_marker_box
 dev.off()
 ```
@@ -478,12 +483,25 @@ anova(mae_ITS_tax_level)$`Pr(>F)`[1]
 mae_mixed_tax_level <- filter(mean_values, taxonomy == "16S-ITS") %>% lm(MAE ~ tax_level, data = .)
 anova(mae_mixed_tax_level)$`Pr(>F)`[1]
 
-anova_dat <- data.frame(text = c(paste0("ANOVA p = ", round(anova(mae_16S_tax_level)$`Pr(>F)`[1], 3)),
-                                 paste0("ANOVA p = ", round(anova(mae_mixed_tax_level)$`Pr(>F)`[1], 3)),
-                                 paste0("ANOVA p = ", round(anova(mae_ITS_tax_level)$`Pr(>F)`[1], 3))),
+anova_dat <- data.frame(text = c(paste("ANOVA~italic('p')~=", round(anova(mae_16S_tax_level)$`Pr(>F)`, 3)[1], sep = "~"),
+                                 paste("ANOVA~italic('p')~=", round(anova(mae_mixed_tax_level)$`Pr(>F)`, 3)[1], sep = "~"),
+                                 paste("ANOVA~italic('p')~=", round(anova(mae_ITS_tax_level)$`Pr(>F)`, 3)[1], sep = "~")),
                         taxonomy = c("16S", "16S-ITS", "ITS"),
                         y = c(1000, 1000, 1000)
                         )
+
+bquote(paste("ANOVA ", italic("p"), " = ", .(round(anova(mae_16S_tax_level)$`Pr(>F)`, 3)[1]))),
+                                 bquote(paste("ANOVA ", italic("p"), " = ", .(round(anova(mae_mixed_tax_level)$`Pr(>F)`, 3)[1]))),
+                                 bquote(paste("ANOVA ", italic("p"), " = ", .(round(anova(mae_ITS_tax_level)$`Pr(>F)`, 3)[1])))
+
+paste("ANOVA~italic('p')~=~", round(anova(mae_16S_tax_level)$`Pr(>F)`, 3)[1])
+
+# bquote(paste("ANOVA ", italic("p"), " = ", .(round(mae_marker_anova_p$`Pr(>F)`[1], 4))))
+
+bquote(ANOVA .(italic("p") = .(round(anova(mae_16S_tax_level)$`Pr(>F)`[1], 3))))
+
+bquote(paste("ANOVA ", italic("p"), " = ", .(round(anova(mae_16S_tax_level)$`Pr(>F)`, 3)[1])))
+bquote(paste("ANOVA ", italic("p"), " = ", .(round(anova(mae_16S_tax_level)$`Pr(>F)`, 3)[1])))
 
 my_comparisons <- list( c("Phylum", "Class"), c("Phylum", "Order"), c("Phylum", "OTU"), c("Class","Order"),c("Class","OTU"), c("Order","OTU") )
 
@@ -506,7 +524,8 @@ mae_taxlevel_box <- ggplot(mean_values) +
             mapping = aes(x = 4, y = Inf, label = text, size = 12),
             hjust = 0.7,
             vjust = 2,
-            size.unit = "pt") +
+            size.unit = "pt",
+            parse = TRUE) +
   scale_size(guide = 'none')
   
 
