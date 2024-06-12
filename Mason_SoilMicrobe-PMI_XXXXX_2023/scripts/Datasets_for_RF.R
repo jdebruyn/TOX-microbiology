@@ -82,6 +82,7 @@ moth_soil=subset_samples(moth_soil, group != "TOX002_1500A") #remove TOX002-1500
 moth_soil=subset_samples(moth_soil, group != "TOX002_1500B") #remove TOX002-1500
 
 min(sample_sums(moth_soil)) #29510
+sum(sample_sums(moth_soil)) # a total of 7858040 reads across all samples
 
 bact_phylo = moth_soil
 
@@ -92,9 +93,10 @@ bact_phylo_n=prune_taxa(taxa_sums(bact_phylo_n) > 10, bact_phylo_n)#remove norma
 #note went from 50,720 taxa to 5,195 taxa
 bact_phylo_n_5000 = subset_samples(bact_phylo_n, ADH <= 5000)
 
-# average samples per donor
-isS4(bact_phylo_n_5000)
+sum(sample_sums(bact_phylo_n_5000)) # a total of 745467.8 reads across all samples <= 5000 ADH
+sample_data(bact_phylo_n_5000)$Sample_Type
 
+#mean number of timepoints per donor
 sample_data(bact_phylo_n_5000) %>%
   data.frame()%>%
   count(Donor) %>%
@@ -112,6 +114,28 @@ bact.n_OTU_tax_table = as.data.frame(tax_table(bact_phylo_n))
 bact.n_OTU_tax_table$OTU = row.names(bact.n_OTU_tax_table) #make a new row names "OTU" with otu names
 write_xlsx(bact.n_meta_otu, here("Mason_SoilMicrobe-PMI_XXXXX_2023/data/TOX2_16S_TSS_meta_OTUtable.xlsx"))
 write_xlsx(bact.n_OTU_tax_table, here("Mason_SoilMicrobe-PMI_XXXXX_2023/data/TOX2_16S_TSS_OTU_taxtable.xlsx")) 
+
+
+##### OTU level - remove singletons and doubletons
+bact_phylo_prune = prune_taxa(taxa_sums(bact_phylo) > 2, bact_phylo) 
+bact_phylo_prune # this removed 26585 taxa
+
+bact_phylo_prune_n = transform_sample_counts(bact_phylo_prune, function(x) {x/sum(x)*10000})#need to do total sum scaling: aka take relative abundance and then multiply by fixed library size of 10,000
+bact_phylo_prune_n = prune_taxa(taxa_sums(bact_phylo_prune_n) > 10, bact_phylo_prune_n)#remove normalized OTUs with less than 10 reads across all samples 
+#note went from 24135 taxa to 5,205 taxa
+
+bact_OTU_prune_n = as(otu_table(bact_phylo_prune_n), "matrix")
+if(taxa_are_rows(bact_phylo_prune_n)){bact_OTU_prune_n = t(bact_OTU_prune_n)}
+bact_OTU_prune_n_df = as.data.frame(bact_OTU_prune_n)
+bact_OTU_prune_n_df$group = row.names(bact_OTU_prune_n_df)
+
+bact.prune.n_meta_otu = metadata %>% left_join(bact_OTU_prune_n_df, by = "group") %>% filter(Otu00001 != "NA")
+
+bact.prune.n_OTU_tax_table = as.data.frame(tax_table(bact_phylo_prune_n))
+bact.prune.n_OTU_tax_table$OTU = row.names(bact.prune.n_OTU_tax_table) #make a new row names "OTU" with otu names
+write_xlsx(bact.prune.n_meta_otu, here("Mason_SoilMicrobe-PMI_XXXXX_2023/data/TOX2_16S_TSS_meta_prune_OTUtable.xlsx"))
+write_xlsx(bact.prune.n_OTU_tax_table, here("Mason_SoilMicrobe-PMI_XXXXX_2023/data/TOX2_16S_TSS_prune_OTU_taxtable.xlsx")) 
+
 
 ####### 16S - Phylum level
 ################################
