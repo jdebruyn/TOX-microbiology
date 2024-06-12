@@ -26,22 +26,25 @@ colpalette2= c("khaki3","steelblue3","orange","chocolate","aquamarine4","plum3",
 ## Load the data
 ```{r, include = FALSE}
 #load the datasets:
-bact.n.otu = read_xlsx(here("data/TOX2_16S_TSS_meta_OTUtable.xlsx"))
-bact.n.class = read_xlsx(here("data/TOX2_16S_TSS_meta_Class_table.xlsx"))
-bact.n.order = read_xlsx(here("data/TOX2_16S_TSS_meta_Order_table.xlsx"))
-bact.n.phylum = read_xlsx(here("data/TOX2_16S_TSS_meta_Phylum_table.xlsx"))
+bact.n.otu = read_xlsx(here("Mason_SoilMicrobe-PMI_XXXXX_2023/data/TOX2_16S_TSS_meta_OTUtable.xlsx"))
+bact.n.class = read_xlsx(here("Mason_SoilMicrobe-PMI_XXXXX_2023/data/TOX2_16S_TSS_meta_Class_table.xlsx"))
+bact.n.order = read_xlsx(here("Mason_SoilMicrobe-PMI_XXXXX_2023/data/TOX2_16S_TSS_meta_Order_table.xlsx"))
+bact.n.phylum = read_xlsx(here("Mason_SoilMicrobe-PMI_XXXXX_2023/data/TOX2_16S_TSS_meta_Phylum_table.xlsx"))
 
-ITS.n.otu = read_xlsx(here("data/TOX2_ITS_TSS_meta_OTU_table.xlsx"))
-ITS.n.class = read_xlsx(here("data/TOX2_ITS_TSS_meta_Class_table.xlsx"))
-ITS.n.order = read_xlsx(here("data/TOX2_ITS_TSS_meta_Order_table.xlsx"))
-ITS.n.phylum = read_xlsx(here("data/TOX2_ITS_TSS_meta_Phylum_table.xlsx"))
+ITS.n.otu = read_xlsx(here("Mason_SoilMicrobe-PMI_XXXXX_2023/data/TOX2_ITS_TSS_meta_OTU_table.xlsx"))
+ITS.n.class = read_xlsx(here("Mason_SoilMicrobe-PMI_XXXXX_2023/data/TOX2_ITS_TSS_meta_Class_table.xlsx"))
+ITS.n.order = read_xlsx(here("Mason_SoilMicrobe-PMI_XXXXX_2023/data/TOX2_ITS_TSS_meta_Order_table.xlsx"))
+ITS.n.phylum = read_xlsx(here("Mason_SoilMicrobe-PMI_XXXXX_2023/data/TOX2_ITS_TSS_meta_Phylum_table.xlsx"))
+
+# load pruned datasets (singletons and doubletons removed prior to TSS):
+bact.n.prune.otu = read_xlsx(here("Mason_SoilMicrobe-PMI_XXXXX_2023/data/TOX2_16S_TSS_meta_prune_OTUtable.xlsx"))
 ```
 
 
 ### Raw dataset summary
 ```{r}
-list_of_df <- list(bact.n.otu, bact.n.class, bact.n.order, bact.n.phylum, ITS.n.otu, ITS.n.class, ITS.n.order, ITS.n.phylum)
-names(list_of_df) <- c("bact.n.otu", "bact.n.class", "bact.n.order", "bact.n.phylum", "ITS.n.otu", "ITS.n.class", "ITS.n.order", "ITS.n.phylum")
+list_of_df <- list(bact.n.otu, bact.n.class, bact.n.order, bact.n.phylum, ITS.n.otu, ITS.n.class, ITS.n.order, ITS.n.phylum, bact.n.prune.otu)
+names(list_of_df) <- c("bact.n.otu", "bact.n.class", "bact.n.order", "bact.n.phylum", "ITS.n.otu", "ITS.n.class", "ITS.n.order", "ITS.n.phylum", "bact.n.prune.otu")
 
 get_n_features <- function(df) {
   
@@ -117,6 +120,7 @@ tax_sum <- n_features %>%
   as.data.frame() %>%
   rename(features = V1) %>% 
   mutate(model = row.names(.)) %>%
+  filter(model != "bact.n.prune.otu") %>% # dont include pruned ft table in count (its a test)
   separate_wider_delim(model, ".n.", names = c("model", "taxonomy")) %>%
   pivot_wider(names_from = taxonomy, values_from = features) %>% 
   select(model, otu, order, class, phylum) %>%
@@ -280,6 +284,13 @@ bact_otu_noenv <- initiate_tune_rf(df_list_5000[["bact.n.otu"]], test, train, en
 
 # with env
 bact_otu_env <- initiate_tune_rf(df_list_5000[["bact.n.otu"]], test, train, env = TRUE) |>
+  run_optimal_rf()
+  
+# pruned table comparison
+bact_prune_otu_noenv <- initiate_tune_rf(df_list_5000[["bact.n.prune.otu"]], test, train, env = FALSE) |>
+  run_optimal_rf()
+  
+bact_prune_otu_env <- initiate_tune_rf(df_list_5000[["bact.n.prune.otu"]], test, train, env = TRUE) |>
   run_optimal_rf()
 ```
 
@@ -451,6 +462,8 @@ all_rf_results <- list("bact_otu_noenv" = bact_otu_noenv,
                        "ITS_otu_env" = ITS_otu_env,
                        "bact_ITS_otu_noenv" = bact_ITS_otu_noenv,
                        "bact_ITS_otu_env" = bact_ITS_otu_env,
+                       "bact_prune_otu_noenv" = bact_prune_otu_noenv,
+                       "bact_prune_otu_env" = bact_prune_otu_env,
                        
                        "bact_order_noenv" = bact_order_noenv,
                        "bact_order_env" = bact_order_env,
@@ -473,5 +486,5 @@ all_rf_results <- list("bact_otu_noenv" = bact_otu_noenv,
                        "bact_ITS_phylum_noenv" = bact_ITS_phylum_noenv,
                        "bact_ITS_phylum_env" = bact_ITS_phylum_env)
 
-saveRDS(all_rf_results, here::here("data/all_rf_results.RDS"))
+saveRDS(all_rf_results, here::here("Mason_SoilMicrobe-PMI_XXXXX_2023/data/all_rf_results.RDS"))
 ```
