@@ -1,3 +1,6 @@
+# ignore hidden and temporary files
+**/._*
+
 /Mason_SoilMicrobe-PMI_XXXXX_2023/.RData
 /Mason_SoilMicrobe-PMI_XXXXX_2023/.Rhistory
 /Mason_SoilMicrobe-PMI_XXXXX_2023/._.Rhistory
