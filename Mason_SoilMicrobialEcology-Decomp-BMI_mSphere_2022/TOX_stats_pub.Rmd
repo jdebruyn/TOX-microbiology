@@ -17,6 +17,23 @@ library(tidyverse)
 library(dplyr)
 library(sjPlot)
 library(sjmisc)
+library(timelineS)
+```
+
+```{r}
+# timeline plot
+timeline_dat = read_excel(here::here("Mason_SoilMicrobialEcology-Decomp-BMI_mSphere_2022/TOX_data_all_pub.xlsx"), sheet = "Timeline") %>%
+  as.data.frame() %>%
+  mutate(Start = as.Date(Start),
+         Finish = as.Date(Finish))
+  
+timelineG(df = timeline_dat, 
+          start = "Start", 
+          end = "Finish", 
+          names = "Donor",
+          phase = "Season") + 
+  labs(x = "Time") +
+  theme_bw()
 ```
 
 ```{r, include=FALSE}
