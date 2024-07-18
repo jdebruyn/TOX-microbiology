@@ -68,6 +68,10 @@ tiff(here::here("Mason_SoilMicrobe-PMI_XXXXX_2023/figures/samples_by_donor_5000A
 dist
 dev.off()
 
+tiff(here::here("Mason_SoilMicrobe-PMI_XXXXX_2023/figures/S1Fig.tiff"), units = "in", width = 7.5, height = 5.5, res = 300)
+dist
+dev.off()
+
 
 #####################################################
 #### obtain 16S OTU tables from phyloseq object #####
