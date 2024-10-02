@@ -1,35 +1,35 @@
 # ignore hidden and temporary files
 **/._*
 
-/Mason_SoilMicrobe-PMI_XXXXX_2023/.RData
-/Mason_SoilMicrobe-PMI_XXXXX_2023/.Rhistory
-/Mason_SoilMicrobe-PMI_XXXXX_2023/._.Rhistory
-/Mason_SoilMicrobe-PMI_XXXXX_2023/scripts/PMI_RF_5000_ADH.R
-/Mason_SoilMicrobe-PMI_XXXXX_2023/scripts/PMI_RF_results_analysis.R
-/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/Cover_letter.docx
-/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/sub_mar2024/*
+/Mason_SoilMicrobe-PMI_PLoS_2024/.RData
+/Mason_SoilMicrobe-PMI_PLoS_2024/.Rhistory
+/Mason_SoilMicrobe-PMI_PLoS_2024/._.Rhistory
+/Mason_SoilMicrobe-PMI_PLoS_2024/scripts/PMI_RF_5000_ADH.R
+/Mason_SoilMicrobe-PMI_PLoS_2024/scripts/PMI_RF_results_analysis.R
+/Mason_SoilMicrobe-PMI_PLoS_2024/manuscript/PloS/Cover_letter.docx
+/Mason_SoilMicrobe-PMI_PLoS_2024/manuscript/PloS/sub_mar2024/*
 
-/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/Mason_PMI.bib
-/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/Plos_sub2024.zip
-/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/PloS.aux
-/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/PloS.bbl
-/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/PloS.blg
-/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/PloS.log
-/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/PloS.synctex.gz
-/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/Table_S1.synctex.gz
-/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/Table_S1.tex
-/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/Table_S1.log
+/Mason_SoilMicrobe-PMI_PLoS_2024/manuscript/PloS/Mason_PMI.bib
+/Mason_SoilMicrobe-PMI_PLoS_2024/manuscript/PloS/Plos_sub2024.zip
+/Mason_SoilMicrobe-PMI_PLoS_2024/manuscript/PloS/PloS.aux
+/Mason_SoilMicrobe-PMI_PLoS_2024/manuscript/PloS/PloS.bbl
+/Mason_SoilMicrobe-PMI_PLoS_2024/manuscript/PloS/PloS.blg
+/Mason_SoilMicrobe-PMI_PLoS_2024/manuscript/PloS/PloS.log
+/Mason_SoilMicrobe-PMI_PLoS_2024/manuscript/PloS/PloS.synctex.gz
+/Mason_SoilMicrobe-PMI_PLoS_2024/manuscript/PloS/Table_S1.synctex.gz
+/Mason_SoilMicrobe-PMI_PLoS_2024/manuscript/PloS/Table_S1.tex
+/Mason_SoilMicrobe-PMI_PLoS_2024/manuscript/PloS/Table_S1.log
 
 /.luarc.json
 .Rproj.user
 
-/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/PloS_revisions_052024/*
+/Mason_SoilMicrobe-PMI_PLoS_2024/manuscript/PloS/PloS_revisions_052024/*
 
 # ignore revision tmp files
-/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/*.aux
-/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/*.blg
-/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/*.docx
-/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/*.log
+/Mason_SoilMicrobe-PMI_PLoS_2024/manuscript/PloS/*.aux
+/Mason_SoilMicrobe-PMI_PLoS_2024/manuscript/PloS/*.blg
+/Mason_SoilMicrobe-PMI_PLoS_2024/manuscript/PloS/*.docx
+/Mason_SoilMicrobe-PMI_PLoS_2024/manuscript/PloS/*.log
 
 # ignore latexdiff files
-/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/*_diff.*
+/Mason_SoilMicrobe-PMI_PLoS_2024/manuscript/PloS/*_diff.*
