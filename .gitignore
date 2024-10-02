@@ -30,3 +30,6 @@
 /Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/*.blg
 /Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/*.docx
 /Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/*.log
+
+# ignore latexdiff files
+/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/*_diff.*
