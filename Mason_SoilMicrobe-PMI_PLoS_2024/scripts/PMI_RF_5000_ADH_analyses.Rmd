@@ -1,0 +1,1285 @@
+---
+title: "Analyze ADH_10 random forest models"
+author: "Allison R. Mason"
+date: "2024-02-29"
+output: html_document
+---
+
+## Overview
+
+This markdown document contains all code to reproduce analyses of random forest models (/scripts/PMI_RF_5000_ADH.Rmd) in the publication XXX. 
+
+```{r setup, include=FALSE}
+set.seed(4)
+
+library(readxl)
+library(phyloseq)
+library(tidyverse)
+library(ranger)
+library(randomForest)
+library(Metrics)
+library(here)
+library(cowplot)
+library(ggpubr)
+library(broom)
+library(RColorBrewer)
+library(kableExtra)
+
+colpalette2= c("khaki3","steelblue3","orange","chocolate","aquamarine4","plum3","black","mediumpurple4","violetred3","brown4","chartreuse3","lavenderblush4","lightpink","mediumpurple3","lightcyan1","palegreen4","red1","wheat4","papayawhip","tomato3","gold1")
+```
+
+## Load the data
+```{r, include = FALSE}
+#load the datasets:
+all_rf_results = readRDS(here("Mason_SoilMicrobe-PMI_PLoS_2024/data/all_rf_results.RDS"))
+```
+
+```{r, include=FALSE}
+# extract summary table
+rf_summary <- function(rf) {
+  
+  rf@optimal_model_results$summary
+}
+
+# get all summary tables
+all_rf_summary <- all_rf_results %>%
+  map(rf_summary)
+
+mean_values <- all_rf_summary %>% map(apply, 2, mean) %>%
+  map(t) %>%
+  map(as.data.frame) %>%
+  list_rbind(names_to = "model") %>%
+  mutate(taxonomy = if_else(str_detect(model, "bact_ITS"), "16S-ITS", str_split_i(model, "_", 1)),
+         tax_level = if_else(str_detect(model, "bact_ITS"), str_split_i(model, "_", 3), str_split_i(model, "_", 2)),
+         tax_level = recode(tax_level, "otu" = "OTU",
+                            "order" = "Order",
+                            "class" = "Class",
+                            "phylum" = "Phylum",
+                            "phlyum" = "Phylum"),
+         taxonomy = recode(taxonomy, "bact" = "16S"),
+         env = if_else(str_detect(model, "noenv"), "no", "yes"))
+  
+
+# writexl::write_xlsx(mean_values, here::here("data/all_rf_mean_results.xlxs"))
+```
+
+```{r, include = FALSE}
+mae_diff_otu_prune <- mean_values %>%
+  filter(str_detect(model, "otu") == "TRUE") %>%
+  filter(taxonomy == "16S") %>%
+  group_by(env) %>%
+  summarise(mae_diff = diff(MAE))
+```
+
+MAE between pruned (*e.g.*, singletons and doubletons removed prior to TSS norm) and unpruned (TSS norm) 16S OTU level models differed by `r pull(mae_diff_otu_prune[mae_diff_otu_prune$env == "no", "mae_diff"])` for models that did not include environmental data and `r pull(mae_diff_otu_prune[mae_diff_otu_prune$env == "yes", "mae_diff"])` for those that did not. 
+
+## Summarize model performace
+
+```{r, include=FALSE}
+mean_values <- mean_values %>%
+  filter(tax_level != "prune")
+```
+
+MAE for all models ranged from `r round(min(mean_values$MAE), 4)` to `r round(max(mean_values$MAE), 4)`, while $r^2$ ranged from `r round(min(mean_values$r_squared), 4)` to `r round(max(mean_values$r_squared), 4)`.
+
+```{r, include=FALSE}
+get_MAE <- function(df) {
+  df$MAE
+}
+
+std_err <- function(data) {
+  sd(data) / sqrt(length(data))
+}
+
+all_MAE <- all_rf_summary %>% map_df(get_MAE) 
+all_MAE_se <- all_MAE %>% 
+  map_df(std_err) %>%
+  t() %>%
+  as.data.frame() %>%
+  rename(SE = V1) %>%
+  mutate(model = rownames(.))
+  
+
+mae_barplot <- mean_values %>%
+  left_join(all_MAE_se, by = "model") %>%
+  ggplot(aes(x = factor(tax_level, ordered = TRUE, levels = c("Phylum", "Class", "Order", "OTU")), y = MAE, group = env, fill = env)) +
+  geom_bar(stat = "identity", color = "black", position = position_dodge()) +
+  geom_errorbar(aes(ymin = MAE - SE, ymax = MAE + SE), width = .2, position = position_dodge(.9)) +
+  scale_y_continuous(expand = expansion(mult = c(0,0))) +
+  coord_cartesian(ylim = c(750, 1000)) + 
+  scale_fill_manual(values=c('#999999','#E69F00')) +
+  facet_wrap(~ taxonomy) + 
+  labs(x = "Taxonomic Level",
+       y = "Mean Absolute Error (MAE)",
+       fill = "Model Includes\nEnvironmental\nParameters") +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust=1),
+        legend.position = "bottom",
+        strip.background = element_rect(fill = "white"))
+
+```
+
+```{r, echo=FALSE, warning=FALSE}
+mae_barplot
+```
+
+
+```{r, include=FALSE, eval=FALSE}
+tiff(here::here("figures/Fig1.tiff"), units = "in", width = 6.5, height = 4, res = 300)
+mae_barplot
+```
+
+```{r, include=FALSE, eval=FALSE}
+mean_values %>%
+  arrange(MAE) %>%
+  mutate(model = str_replace(model, "bact", "16S"),
+         model = str_replace_all(model, "_", " ")) %>%
+  kbl(.,
+      format = "latex",
+      col.names = c("Model name", "OOB MSE", "RMSE", "MAE", "$r^{2}$", "Marker", "Taxonomic Level", "Environmental parameters"),
+      escape = F,
+      booktabs = TRUE) %>%
+  column_spec(7, width = "2cm") %>%
+  column_spec(8, width = "2cm") %>%
+  kableExtra::save_kable(., file = here::here("Mason_SoilMicrobe-PMI_PLoS_2024/figures/all_rf_summary_table.pdf"))
+  
+
+```
+
+```{r, include=FALSE, eval = FALSE}
+mean_values %>%
+  arrange(MAE) %>%
+  mutate(model = str_replace(model, "bact", "16S"),
+         model = str_replace_all(model, "_", " ")) %>%
+  kbl(.,
+      format = "latex",
+      col.names = c("Model name", "OOB MSE", "RMSE", "MAE", "$r^{2}$", "Marker", "Taxonomic Level", "Environmental parameters"),
+      escape = F,
+      booktabs = TRUE) %>%
+  column_spec(7, width = "2cm") %>%
+  column_spec(8, width = "2cm") %>%
+  kableExtra::save_kable(., file = here::here("Mason_SoilMicrobe-PMI_PLoS_2024/figures/S2Table.pdf"))
+```
+
+### Best 10 overall performing models:
+
+```{r, echo=FALSE}
+mean_values %>%
+  slice_min(order_by = MAE, n = 10) %>%
+  knitr::kable(., caption = "Top 10 as chosen by lowest MAE")
+```
+
+```{r, echo=FALSE}
+mean_values %>%
+  slice_max(order_by = r_squared, n = 10) %>%
+  knitr::kable(., caption = "Top 10 as chosen by highest $r^2$")
+```
+
+```{r, include=FALSE}
+n_16S_top_10 <- mean_values %>% slice_min(order_by = MAE, n = 10) %>% count(taxonomy) %>% filter(taxonomy == "16S") %>% pull(n)
+n_16S_ITS_top_10 <- mean_values %>% slice_min(order_by = MAE, n = 10) %>% count(taxonomy) %>% filter(taxonomy == "16S-ITS") %>% pull(n)
+```
+
+
+16S-only (`r n_16S_top_10`) and 16S-ITS (`r n_16S_ITS_top_10`) models comprised the top 10 over all best performing models, as determined by lowest average MAE.
+
+### Worst 10 overall performing models:
+
+```{r, echo=FALSE}
+mean_values %>%
+  slice_max(order_by = MAE, n = 10) %>%
+  knitr::kable(.)
+```
+
+
+### All 16S models ordered by MAE:
+
+```{r, echo=FALSE}
+# 16S only models
+bact_summary <- mean_values %>%
+  filter(taxonomy == "16S") %>%
+  arrange(MAE)
+
+knitr::kable(bact_summary)
+```
+
+16S models MAE ranged from `r round(min(bact_summary$MAE), 4)` to `r round(max(bact_summary$MAE), 4)`, with the top performing model the phylum level model with environmental parameters.
+
+### All ITS models ordered by MAE:
+
+```{r, echo=FALSE}
+# ITS only models
+mean_values %>%
+  filter(taxonomy == "ITS") %>%
+  arrange(MAE) %>%
+  knitr::kable(.)
+```
+
+### All 16S-ITS models ordered by MAE:
+
+```{r, echo=FALSE}
+# 16S-ITS models
+mean_values %>%
+  filter(taxonomy == "16S-ITS") %>%
+  arrange(MAE) %>%
+  knitr::kable(.)
+```
+
+### Best 3 models for each biological marker
+
+```{r, echo=FALSE}
+top_3_for_each_marker <- mean_values %>%
+  group_by(taxonomy) %>%
+  slice_min(order_by = MAE, n = 3) 
+
+top_mods <- mean_values %>%
+  group_by(taxonomy) %>%
+  slice_min(order_by = MAE, n = 1) %>%
+  pull("model")
+  
+knitr::kable(top_3_for_each_marker)
+```
+
+The top models for each biological marker were `r top_mods[1]`, `r top_mods[2]`, and `r top_mods[3]`.
+
+## Model Predictions
+```{r, include=FALSE}
+
+# RF <- all_rf_results[[1]]
+extract_lm_results <- function(RF, dataset) {
+  if (dataset == "test") {
+    d <- RF@test_df
+  }
+  
+  if (dataset == "train") {
+    d <- RF@train_df
+  }
+  
+  lm <- lm(d$ADH_10_actual ~ predict(RF@optimal_model_results$optimal_ranger, d)$predictions)
+  anova <- anova(lm)
+  
+  return(list("dataset" = dataset,
+              "model_summary" = lm,
+              "model_anova" = anova))
+  
+}
+# p <- extract_lm_results(RF, dataset = "train")
+
+all_train_predictions <- map(all_rf_results, extract_lm_results, dataset = "train")
+all_test_predictions <-  map(all_rf_results, extract_lm_results, dataset = "test")
+
+
+
+# mod <- all_train_predictions[[1]]
+return_model_summaries <- function(mod_name, list) {
+  
+  return(list("Model" = mod_name,
+              "Dataset" = list[[mod_name]]$dataset,
+              "Adj_r2" = signif(summary(list[[mod_name]]$model_summary)$adj.r.squared, 3),
+              "Intercept" = signif(list[[mod_name]]$model_summary$coefficients[[1]], 3),
+              "Slope" = signif(list[[mod_name]]$model_summary$coefficients[[2]], 3),
+              "p_value" = signif(summary(list[[mod_name]]$model_summary)$coefficients[2, 4], 3)))
+  
+}
+# return_model_summaries("bact_otu_noenv", all_train_predictions)
+
+y <- map_dfr(names(all_train_predictions), return_model_summaries, list = all_train_predictions) %>%
+  bind_rows(map_dfr(names(all_test_predictions), return_model_summaries, list = all_test_predictions))
+  
+y %>%
+  summarise(min = min(Adj_r2),
+            max = max(Adj_r2), 
+            .by = c("Dataset"))
+  
+  
+y %>% 
+  mutate(Model = str_replace(Model, "bact", "16S"),
+         Model = str_replace_all(Model, "_", " ")) %>%
+  arrange(desc(Model)) %>%
+  kbl(.,
+    format = "latex",
+    col.names = c("Model", "Dataset", "Adjusted $r^{2}$", "Intercept", "Slope", "$p$-value"),
+    booktabs = TRUE,
+    escape = F) 
+  
+# %>%
+#   save_kable(here::here("Mason_SoilMicrobe-PMI_PLoS_2024/figures/all_mods_test-train_lm.pdf"), keep_tex = FALSE)
+  
+# write_csv(y, here::here("Mason_SoilMicrobe-PMI_PLoS_2024/data/all_mods_test-train_lm.csv"))
+```
+
+```{r, include=FALSE, eval=FALSE}
+y %>% 
+  mutate(Model = str_replace(Model, "bact", "16S"),
+         Model = str_replace_all(Model, "_", " ")) %>%
+  arrange(desc(Model)) %>%
+  kbl(.,
+    format = "latex",
+    col.names = c("Model", "Dataset", "Adjusted $r^{2}$", "Intercept", "Slope", "$p$-value"),
+    booktabs = TRUE,
+    escape = F) %>%
+  save_kable(here::here("Mason_SoilMicrobe-PMI_PLoS_2024/figures/S3Table.pdf"), keep_tex = FALSE)
+```
+
+
+### `r top_mods[1]`
+
+```{r, include=FALSE}
+model_1_name <- top_mods[1]
+model_1_idx <- which(names(all_rf_summary) %in% model_1_name)
+
+model_1_opt_ranger <- all_rf_results[[model_1_idx]]@optimal_model_results$optimal_ranger
+
+# train set accuracy
+mod1_train_predictions_lm <- lm(all_rf_results[[model_1_idx]]@train_df$ADH_10_actual ~ predict(model_1_opt_ranger, all_rf_results[[model_1_idx]]@train_df)$predictions)
+mod1_train_predictions_lm_aov <- anova(mod1_train_predictions_lm)
+
+mod1_train_predictions <- ggplot(data = NULL,
+       aes(x = predict(model_1_opt_ranger, all_rf_results[[model_1_idx]]@train_df)$predictions,
+           y = all_rf_results[[model_1_idx]]@train_df$ADH_10_actual)) +
+  geom_point(size = 1.5) +
+  geom_smooth(method = "lm", linetype = "solid", color = 'red') +
+  labs(x = "Predicted ADH",
+       y = "Actual ADH") +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  annotate("text",
+           x = 2750,
+           y = -600,
+           label = paste0("Adj R2 = ", signif(summary(mod1_train_predictions_lm)$adj.r.squared, 3),
+                 " Intercept = ", signif(mod1_train_predictions_lm$coefficients[[1]], 3), "\n",
+                 " Slope = ", signif(mod1_train_predictions_lm$coefficients[[2]], 3),
+                 " P = ", signif(summary(mod1_train_predictions_lm)$coefficients[2, 4], 3)),
+           size = 2)
+
+# test set accuracy
+mod1_test_predictions_lm <- lm(all_rf_results[[model_1_idx]]@test_df$ADH_10_actual ~ predict(model_1_opt_ranger, all_rf_results[[model_1_idx]]@test_df)$predictions)
+
+mod1_test_predictions <- ggplot(data = NULL,
+       aes(x = predict(model_1_opt_ranger, all_rf_results[[model_1_idx]]@test_df)$predictions,
+           y = all_rf_results[[model_1_idx]]@test_df$ADH_10_actual)) +
+  geom_point(size = 1.5) +
+  geom_smooth(method = "lm", linetype = "dashed", color = 'red') +
+  labs(x = "Predicted ADH",
+       y = "Actual ADH") +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  annotate("text",
+           x = 2500,
+           y = -1000,
+           label = paste0("Adj R2 = ", signif(summary(mod1_test_predictions_lm)$adj.r.squared, 3),
+                 " Intercept = ", signif(mod1_test_predictions_lm$coefficients[[1]], 3), "\n",
+                 " Slope = ", signif(mod1_test_predictions_lm$coefficients[[2]], 3),
+                 " P = ", signif(summary(mod1_test_predictions_lm)$coefficients[2, 4], 3)),
+           size = 2)
+```
+
+### `r top_mods[2]`
+
+```{r, include=FALSE}
+model_2_name <- top_mods[2]
+model_2_idx <- which(names(all_rf_summary) %in% model_2_name)
+
+model_2_opt_ranger <- all_rf_results[[model_2_idx]]@optimal_model_results$optimal_ranger
+
+# train set accuracy
+mod2_train_predictions_lm <- lm(all_rf_results[[model_2_idx]]@train_df$ADH_10_actual ~ predict(model_2_opt_ranger, all_rf_results[[model_2_idx]]@train_df)$predictions)
+
+
+mod2_train_predictions <- ggplot(data = NULL,
+       aes(x = predict(model_2_opt_ranger, all_rf_results[[model_2_idx]]@train_df)$predictions,
+           y = all_rf_results[[model_2_idx]]@train_df$ADH_10_actual)) +
+  geom_point(size = 1.5) +
+  geom_smooth(method = "lm", linetype = "solid", color = 'blue') +
+  labs(x = "Predicted ADH",
+       y = "Actual ADH") +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  annotate("text",
+           x = 2550,
+           y = -600,
+           label = paste0("Adj R2 = ", signif(summary(mod2_train_predictions_lm)$adj.r.squared, 3),
+                 " Intercept = ", signif(mod2_train_predictions_lm$coefficients[[1]], 3), "\n",
+                 " Slope = ", signif(mod2_train_predictions_lm$coefficients[[2]], 3),
+                 " P = ", signif(summary(mod2_train_predictions_lm)$coefficients[2, 4], 3)),
+           size = 2)
+
+# test set accuracy
+mod2_test_predictions_lm <- lm(all_rf_results[[model_2_idx]]@test_df$ADH_10_actual ~ predict(model_2_opt_ranger, all_rf_results[[model_2_idx]]@test_df)$predictions)
+
+mod2_test_predictions <- ggplot(data = NULL,
+       aes(x = predict(model_2_opt_ranger, all_rf_results[[model_2_idx]]@test_df)$predictions,
+           y = all_rf_results[[model_2_idx]]@test_df$ADH_10_actual)) +
+  geom_point(size = 1.5) +
+  geom_smooth(method = "lm", linetype = "dashed", color = 'blue') +
+  labs(x = "Predicted ADH",
+       y = "Actual ADH") +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  annotate("text",
+           x = 2250,
+           y = -1200,
+           label = paste0("Adj R2 = ", signif(summary(mod2_test_predictions_lm)$adj.r.squared, 3),
+                 " Intercept = ", signif(mod2_test_predictions_lm$coefficients[[1]], 3), "\n",
+                 " Slope = ", signif(mod2_test_predictions_lm$coefficients[[2]], 3),
+                 " P = ", signif(summary(mod2_test_predictions_lm)$coefficients[2, 4], 3)),
+           size = 2)
+```
+
+
+### `r top_mods[3]`
+
+```{r, include=FALSE}
+model_3_name <- top_mods[3]
+model_3_idx <- which(names(all_rf_summary) %in% model_3_name)
+
+model_3_opt_ranger <- all_rf_results[[model_3_idx]]@optimal_model_results$optimal_ranger
+
+# train set accuracy
+mod3_train_predictions_lm <- lm(all_rf_results[[model_3_idx]]@train_df$ADH_10_actual ~ predict(model_3_opt_ranger, all_rf_results[[model_3_idx]]@train_df)$predictions)
+
+
+mod3_train_predictions <- ggplot(data = NULL,
+       aes(x = predict(model_3_opt_ranger, all_rf_results[[model_3_idx]]@train_df)$predictions,
+           y = all_rf_results[[model_3_idx]]@train_df$ADH_10_actual)) +
+  geom_point(size = 1.5) +
+  geom_smooth(method = "lm", linetype = "solid", color = "magenta4") +
+  labs(x = "Predicted ADH",
+       y = "Actual ADH") +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  annotate("text",
+           x = 2800,
+           y = -400,
+           label = paste0("Adj R2 = ", signif(summary(mod3_train_predictions_lm)$adj.r.squared, 3),
+                 " Intercept = ", signif(mod3_train_predictions_lm$coefficients[[1]], 3), "\n",
+                 " Slope = ", signif(mod3_train_predictions_lm$coefficients[[2]], 3),
+                 " P = ", signif(summary(mod3_train_predictions_lm)$coefficients[2, 4], 3)),
+           size = 2)
+
+
+# test set accuracy
+mod3_test_predictions_lm <- lm(all_rf_results[[model_3_idx]]@test_df$ADH_10_actual ~ predict(model_3_opt_ranger, all_rf_results[[model_3_idx]]@test_df)$predictions)
+
+mod3_test_predictions <- ggplot(data = NULL,
+       aes(x = predict(model_3_opt_ranger, all_rf_results[[model_3_idx]]@test_df)$predictions,
+           y = all_rf_results[[model_3_idx]]@test_df$ADH_10_actual)) +
+  geom_point(size = 1.5) +
+  geom_smooth(method = "lm", linetype = "dashed", color = 'magenta4') +
+  labs(x = "Predicted ADH",
+       y = "Actual ADH") +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  annotate("text",
+           x = 2600,
+           y = -1200,
+           label = paste0("Adj R2 = ", signif(summary(mod3_test_predictions_lm)$adj.r.squared, 3),
+                 " Intercept = ", signif(mod3_test_predictions_lm$coefficients[[1]], 3), "\n",
+                 " Slope = ", signif(mod3_test_predictions_lm$coefficients[[2]], 3),
+                 " P = ", signif(summary(mod3_test_predictions_lm)$coefficients[2, 4], 3)),
+           size = 2)
+
+# ggarrange(mod3_train_predictions, mod3_test_predictions, legend.grob = dataset_legend)
+```
+
+
+```{r, echo=FALSE, message=FALSE}
+# plot_grid(mod1_train_predictions, mod2_train_predictions, mod3_train_predictions, mod1_test_predictions, mod2_test_predictions, mod3_test_predictions, 
+#           nrow = 2,
+#           labels = c("A", "B", "C", "D", "E", "F"))
+
+top_mods_labels <- top_mods %>% str_replace(., "bact", "16S")
+
+mod_colors <- c("red", "blue", "magenta4")
+names(mod_colors) <- top_mods_labels
+
+dataset <- data.frame(mod = c(top_mods_labels[1], top_mods_labels[1], top_mods_labels[2], top_mods_labels[2], top_mods_labels[3], top_mods_labels[3]),
+           dataset = c("Train", "Test", "Train", "Test", "Train", "Test"), 
+           val1 = c(2, 3, 5, 2, 3, 5),
+           val2 = c(1:6)) %>% 
+  mutate(mod = factor(mod, levels = c("16S_phylum_env", "16S_ITS_order_noenv", "ITS_order_env")),
+         dataset = factor(dataset))
+# dataset$dataset <- as.factor(dataset$dataset)
+t <- ggplot(dataset) +
+  aes(x = val1, y = val2, linetype = factor(dataset, levels = c("Train", "Test"))) +
+  geom_point(aes(color = mod)) +
+  scale_color_manual(values = mod_colors, drop = FALSE) +
+  geom_smooth(method = "lm", color = "black") +
+  labs(color = "Model",
+       linetype = "Data set") +
+  theme_bw() +
+  theme(legend.position = "top")
+dataset_legend <- get_legend(t)
+
+ggarrange(mod1_train_predictions, mod2_train_predictions, mod3_train_predictions, mod1_test_predictions, mod2_test_predictions, mod3_test_predictions,
+          nrow = 2,
+          ncol = 3,
+          labels = c("A", "B", "C", "D", "E", "F"),
+          legend.grob = dataset_legend,
+          legend = "top") 
+```
+
+```{r, include=FALSE, eval=FALSE}
+tiff(here::here("Mason_SoilMicrobe-PMI_PLoS_2024/figures/Fig2.tiff"), units = "in", width = 7.5, height = 5.5, res = 300)
+ggarrange(mod1_train_predictions, mod2_train_predictions, mod3_train_predictions, mod1_test_predictions, mod2_test_predictions, mod3_test_predictions,
+          nrow = 2,
+          ncol = 3,
+          labels = c("A", "B", "C", "D", "E", "F"),
+          legend.grob = dataset_legend,
+          legend = "top") 
+dev.off()
+```
+
+## MAE ~ biological marker
+
+```{r, include=FALSE}
+mae_marker <- lm(MAE ~ taxonomy, data = mean_values)
+# anova(mae_marker) %>% writexl::write_xlsx(., here::here("data/MAE_tax-marker_anova.xlsx"))
+
+mae_marker_anova_p <- anova(mae_marker)
+mae_marker_anova_p$`Pr(>F)`[1]
+
+library(rstatix)
+library(ggpubr)
+mae_tax_posthoc_t <- mean_values %>%
+  t_test(MAE ~ taxonomy) %>%
+  adjust_pvalue() %>%
+  mutate(y.position = c(1010, 1025, 1050))
+write_csv(mae_tax_posthoc_t, here::here("Mason_SoilMicrobe-PMI_PLoS_2024data/mae_marker_posthoc_t_results.csv"))
+
+# my_comparisons <- list( c("16S", "16S-ITS"), c("16S", "ITS"), c("16S-ITS", "ITS"))
+
+tax_colors <- c("#395D9CFF", "#3497A9FF", "#60CEACFF")
+names(tax_colors) <- c("16S", "16S-ITS", "ITS")
+
+mae_marker_box <- ggplot(mean_values) +
+  aes(x = taxonomy, y = MAE) +
+  geom_boxplot(aes(fill = taxonomy)) +
+  labs(x = "Biological Marker",
+       y = "Average Mean Absolute Error (MAE)") +
+  scale_fill_manual(values = tax_colors, guide = "none") +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  stat_pvalue_manual(mae_tax_posthoc_t, label = "p.adj") +
+  # stat_compare_means(comparisons = my_comparisons, method = "t.test", label = "p.format", label.y = c(1010, 1025, 1050)) +
+  annotate("text",
+           x = 1,
+           y = 1070,
+           label = bquote(paste("ANOVA ", italic("p"), " = ", .(round(mae_marker_anova_p$`Pr(>F)`[1], 4)))),
+           size = 3) 
+
+```
+
+```{r, include=FALSE, eval = FALSE}
+mae_tax_posthoc_t %>%
+  select(group1, group2, statistic, df, p, p.adj) %>%
+  kbl(.,
+      format = "latex",
+      col.names = c("Group 1", "Group 2", "Statistic", "df", "$p$", "Adjusted $p$"),
+      digits = 3,
+      booktabs = TRUE,
+      escape = FALSE) %>% 
+  save_kable(here::here("Mason_SoilMicrobe-PMI_PLoS_2024/figures/MAE_biologicalMarker_posthoct.pdf"), keep_tex = FALSE)
+
+```
+
+```{r, include=FALSE, eval=FALSE}
+mae_tax_posthoc_t %>%
+  select(group1, group2, statistic, df, p, p.adj) %>%
+  kbl(.,
+      format = "latex",
+      col.names = c("Group 1", "Group 2", "Statistic", "df", "$p$", "Adjusted $p$"),
+      digits = 3,
+      booktabs = TRUE,
+      escape = FALSE) %>% 
+  save_kable(here::here("Mason_SoilMicrobe-PMI_PLoS_2024/figures/S5Table.pdf"), keep_tex = FALSE)
+```
+
+```{r, echo=FALSE}
+mae_marker_box
+```
+
+```{r, include=FALSE}
+rownames(mae_marker_anova_p)[1] <- "biologicalMarker"
+kbl(mae_marker_anova_p,
+    format = "latex",
+    row.names = TRUE,
+    # caption = "Model mean absoulte error (MAE) varies due to biological marker as reported by analysis of Variance (ANOVA). Model parameter biologicalMarker refers whether 16S, ITS, or both organisms were used in model construction.",
+    digits = 3,
+    booktabs = TRUE) %>% 
+save_kable(here::here("figures/MAE_biologicalMarker_anova.pdf"), keep_tex = FALSE)
+```
+
+```{r, include=FALSE, eval=FALSE}
+rownames(mae_marker_anova_p)[1] <- "biologicalMarker"
+kbl(mae_marker_anova_p,
+    format = "latex",
+    row.names = TRUE,
+    # caption = "Model mean absoulte error (MAE) varies due to biological marker as reported by analysis of Variance (ANOVA). Model parameter biologicalMarker refers whether 16S, ITS, or both organisms were used in model construction.",
+    digits = 3,
+    booktabs = TRUE) %>% 
+save_kable(here::here("Mason_SoilMicrobe-PMI_PLoS_2024/figures/S4Table.pdf"), keep_tex = FALSE)
+```
+
+```{r, include=FALSE, eval=FALSE}
+tiff(here::here("Mason_SoilMicrobe-PMI_PLoS_2024/figures/Fig3.tiff"), units = "in", width = 4, height = 4, res = 300)
+mae_marker_box
+dev.off()
+```
+
+
+## MAE ~ taxonomic level
+
+```{r, include=FALSE, eval = FALSE}
+mae_taxlevel_anova_p <- anova(lm(MAE ~ tax_level, data = mean_values))
+
+rownames(mae_taxlevel_anova_p)[1] <- "taxonomicLevel"
+kbl(mae_taxlevel_anova_p,
+    format = "latex",
+    row.names = TRUE,
+    digits = 3,
+    booktabs = TRUE) %>% 
+save_kable(here::here("Mason_SoilMicrobe-PMI_PLoS_2024/figures/MAE_taxlevel_anova.pdf"), keep_tex = FALSE)
+```
+
+```{r, include=FALSE, eval = FALSE}
+rownames(mae_taxlevel_anova_p)[1] <- "taxonomicLevel"
+kbl(mae_taxlevel_anova_p,
+    format = "latex",
+    row.names = TRUE,
+    digits = 3,
+    booktabs = TRUE) %>% 
+save_kable(here::here("Mason_SoilMicrobe-PMI_PLoS_2024/figures/S6Table.pdf"), keep_tex = FALSE)
+```
+
+```{r, include=FALSE}
+anova(lm(MAE ~ tax_level*taxonomy, data = mean_values))
+ggplot(mean_values) +
+  aes(y = MAE, x = factor(tax_level, ordered = TRUE, levels = c("Phylum", "Class", "Order", "OTU")), color = taxonomy, group = taxonomy) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_bw()
+
+mae_16S_tax_level <- filter(mean_values, taxonomy == "16S") %>% lm(MAE ~ tax_level, data = .)
+anova(mae_16S_tax_level)$`Pr(>F)`[1]
+mae_16S_tax_level_anova <- data.frame(anova(mae_16S_tax_level))[1, ] %>%
+  rownames_to_column(var = "bio_marker") %>%
+  mutate(bio_marker = recode(bio_marker, "tax_level" = "16S"))
+
+
+mae_ITS_tax_level <- filter(mean_values, taxonomy == "ITS") %>% lm(MAE ~ tax_level, data = .)
+anova(mae_ITS_tax_level)$`Pr(>F)`[1]
+mae_ITS_tax_level_anova <- data.frame(anova(mae_ITS_tax_level))[1, ] %>%
+  rownames_to_column(var = "bio_marker") %>%
+  mutate(bio_marker = recode(bio_marker, "tax_level" = "ITS"))
+
+mae_mixed_tax_level <- filter(mean_values, taxonomy == "16S-ITS") %>% lm(MAE ~ tax_level, data = .)
+anova(mae_mixed_tax_level)$`Pr(>F)`[1]
+mae_16SITS_tax_level_anova <- data.frame(anova(mae_mixed_tax_level))[1, ] %>%
+  rownames_to_column(var = "bio_marker") %>%
+  mutate(bio_marker = recode(bio_marker, "tax_level" = "16S-ITS"))
+```
+
+```{r, include=FALSE}  
+rbind(mae_16S_tax_level_anova, mae_16SITS_tax_level_anova, mae_ITS_tax_level_anova) %>%
+  rename("Biological Marker" = "bio_marker",
+         "F value" = "F.value",
+        `Pr(>F)` = "Pr..F.") %>%
+  kbl(.,
+    format = "latex",
+    digits = 3,
+    booktabs = TRUE) %>% 
+save_kable(here::here("Mason_SoilMicrobe-PMI_PLoS_2024/figures/MAE_taxlevel_biomarker_anova.pdf"), keep_tex = FALSE)
+```
+
+```{r, include=FALSE, eval=FALSE}
+rbind(mae_16S_tax_level_anova, mae_16SITS_tax_level_anova, mae_ITS_tax_level_anova) %>%
+  rename("Biological Marker" = "bio_marker",
+         "F value" = "F.value",
+        `Pr(>F)` = "Pr..F.") %>%
+  kbl(.,
+    format = "latex",
+    digits = 3,
+    booktabs = TRUE) %>% 
+save_kable(here::here("Mason_SoilMicrobe-PMI_PLoS_2024/figures/S7Table.pdf"), keep_tex = FALSE)
+```
+
+```{r, include=FALSE}
+my_comparisons <- list( c("Phylum", "Class"), c("Phylum", "Order"), c("Phylum", "OTU"), c("Class","Order"),c("Class","OTU"), c("Order","OTU") )
+
+tax_colors <- c("#395D9CFF", "#3497A9FF", "#60CEACFF")
+names(tax_colors) <- c("16S", "16S-ITS", "ITS")
+
+
+mae_taxlevel_box <- ggplot(mean_values) +
+  aes(x = factor(tax_level, ordered = TRUE, levels = c("Phylum", "Class", "Order", "OTU")), y = MAE, fill = taxonomy) +
+  geom_point() +
+  geom_boxplot() +
+  labs(x = "Taxonomic Level",
+       y = "Average Mean Absolute\n Error (MAE)") +
+  facet_wrap(~ taxonomy) +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_rect(fill = "white")) +
+  scale_fill_manual(values = tax_colors, guide = "none") +
+  geom_text(data = anova_dat,
+            mapping = aes(x = 4, y = Inf, label = text, size = 12),
+            hjust = 0.7,
+            vjust = 2,
+            size.unit = "pt",
+            parse = TRUE) +
+  scale_size(guide = 'none')
+  
+
+# only 16S-ITS Class and order and significantly different
+mae_16S_tax_level <- filter(mean_values, taxonomy == "16S") %>% lm(MAE ~ tax_level, data = .)
+anova(mae_16S_tax_level) %>% writexl::write_xlsx(., here::here("data/MAE_16S_taxlevel_anova.xlsx"))
+mean_values$tax_level <- factor(mean_values$tax_level, ordered = TRUE, levels = c("Phylum", "Class", "Order", "OTU"))
+pairwise.t.test(mean_values[mean_values$taxonomy == "16S" , "MAE"], mean_values[mean_values$taxonomy == "16S" , "tax_level"], p.p.adjust.method = "none")
+
+diff(range(mean_values[mean_values$taxonomy == "16S" , "MAE"]))
+
+mean_values %>%
+  filter(taxonomy == "16S") %>%
+  summarise(mean_mae = mean(MAE), .by = c("tax_level"))
+  summarise(range = diff(range(MAE)), .by = c("tax_level")) %>%
+  summarise(mean_range = mean(range)) #26.9072
+
+mean_values %>%
+  filter(taxonomy == "16S") %>%
+  t_test(MAE ~ tax_level) %>%
+  adjust_pvalue()
+
+mae_ITS_tax_level <- filter(mean_values, taxonomy == "ITS") %>% lm(MAE ~ tax_level, data = .)
+anova(mae_ITS_tax_level) %>% writexl::write_xlsx(., here::here("data/MAE_ITS_taxlevel_anova.xlsx"))
+pairwise.t.test(mean_values[mean_values$taxonomy == "ITS" , "MAE"], mean_values[mean_values$taxonomy == "ITS" , "tax_level"], p.p.adjust.method = "none")
+
+diff(range(mean_values[mean_values$taxonomy == "ITS" , "MAE"]))
+
+mean_values %>%
+  filter(taxonomy == "ITS") %>%
+  summarise(mean_mae = mean(MAE), .by = c("tax_level"))
+
+mean_values %>%
+  filter(taxonomy == "ITS") %>%
+  t_test(MAE ~ tax_level) %>%
+  adjust_pvalue()
+
+mae_mixed_tax_level <- filter(mean_values, taxonomy == "16S-ITS") %>% lm(MAE ~ tax_level, data = .)
+anova(mae_mixed_tax_level) %>% writexl::write_xlsx(., here::here("data/MAE_16S-ITS_taxlevel_anova.xlsx"))
+pairwise.t.test(mean_values[mean_values$taxonomy == "16S-ITS" , "MAE"], mean_values[mean_values$taxonomy == "16S-ITS" , "tax_level"], p.p.adjust.method = "none")
+
+diff(range(mean_values[mean_values$taxonomy == "16S-ITS" , "MAE"]))
+
+mean_values %>%
+  filter(taxonomy == "16S-ITS") %>%
+  summarise(mean_mae = mean(MAE), .by = c("tax_level"))
+  summarise(range = diff(range(MAE)), .by = c("tax_level")) %>%
+  summarise(mean_range = mean(range)) 
+
+mean_values %>%
+  filter(taxonomy == "16S-ITS") %>%
+  t_test(MAE ~ tax_level) %>%
+  adjust_pvalue()
+```
+
+```{r, echo=FALSE}
+mae_taxlevel_box
+```
+
+
+```{r, include=FALSE, eval=FALSE}
+tiff(here::here("Mason_SoilMicrobe-PMI_PLoS_2024/figures/Fig4.tiff"), units = "in", width = 6, height = 3.5, res = 300)
+mae_taxlevel_box
+dev.off()
+```
+
+## Model Features
+
+### Top 25 important model features
+
+```{r, include=FALSE, warning=FALSE}
+get_top_25_features <- function(optimal_model, tax_table, tax_level) {
+
+  top_25 <- optimal_model$variable.importance %>%
+    tidy() %>%
+    slice_max(order_by = x, n = 25)
+  
+  top_25_tax <- tax_table %>%
+    filter(OTU %in% top_25$names) 
+
+  top_25 <- top_25 %>%
+    left_join(top_25_tax, by = c("names" = "OTU")) %>%
+    mutate(names = case_when(names == "EC_LRR" ~ "Electrical conductivity",
+                             names == "LAP_LRR" ~ "Leucine aminopeptidase",
+                             names == "pH_LRR" ~ "pH",
+                             names == "moisture" ~ "Soil moisture",
+                             names == "Temperature" ~ "Temperature",
+                             names == "PHOS_LRR" ~ "Alkaline phosphatase",
+                             names == "BG_LRR" ~ "$\\beta$-glucosidase",
+                             names == "NAG_LRR" ~ "N-acetyl-$\\beta$-D-glucoseaminidase",
+                             .default = names),
+           predictor_type = case_when(str_detect(names, "Otu") == TRUE ~ "16S",
+                                      str_detect(names, "ITS") == TRUE ~ "ITS",
+                                      TRUE ~ "Environmental"))
+
+   return(top_25)
+}
+
+
+plot_top_25_features <- function(top_25_df) {
+  top_25_df$predictor_type <- factor(top_25_df$predictor_type, levels = c("16S", "ITS", "Environmental"))
+  
+  colors <- brewer.pal(3, "Dark2")
+  types <- factor(x = c("16S", "ITS", "Environmental"), levels = c("16S", "ITS", "Environmental"))
+  names(colors) <- levels(types)
+  
+
+  top_25_plot <- top_25_df %>%
+    ggplot(aes(reorder(predictor, x), x, fill = predictor_type)) +
+    geom_col(show.legend = T) +
+    coord_flip() + 
+    scale_fill_manual(values = c("16S" = "#1B9E77", "ITS" = "#D95F02", "Environmental" = "#7570B3"), drop = FALSE) +
+    scale_y_continuous(labels = function(x) format(x, scientific = TRUE),
+                       expand = expansion(mult = c(0,0))) +
+    labs(y = "variance in responses",
+         x = "Predictor",
+         fill = "Predictor type") +
+    theme_bw() +
+    theme(panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          axis.text.y = element_text(size = 6),
+          axis.title.x = element_text(size = 10),
+          axis.title.y = element_text(size = 10),
+          aspect.ratio = 1.9/2)
+
+  top_25_plot
+}
+```
+
+```{r, include=FALSE, warning=FALSE}
+bact_phylum_tax_table <- read_excel(here("Mason_SoilMicrobe-PMI_PLoS_2024/data/TOX2_16S_TSS_Phylum_taxtable.xlsx"))
+bact_phylum_env_imp <- get_top_25_features(model_1_opt_ranger, bact_phylum_tax_table, "Phylum") %>%
+  mutate(model = "16S phylum env",
+         Species = NA_character_) %>%
+  select(model, names, x, predictor_type, Kingdom, Phylum, Class, Order, Family, Genus, Species) 
+top_bact_mod_features <- get_top_25_features(model_1_opt_ranger, bact_phylum_tax_table, "Phylum") |>
+  plot_top_25_features()
+
+
+bact_order_tax_table <- read_excel(here("Mason_SoilMicrobe-PMI_PLoS_2024/data/TOX2_16S_TSS_Order_taxtable.xlsx"))
+its_order_tax_table <- read_excel(here("Mason_SoilMicrobe-PMI_PLoS_2024/data/TOX2_ITS_TSS_Order_taxtable.xlsx"))
+
+combined_order_tax_table <- bind_rows(bact_order_tax_table, its_order_tax_table)
+bact_its_order_imp <- get_top_25_features(model_2_opt_ranger, combined_order_tax_table, "Order") %>%
+  mutate(model = "16S-ITS order noenv") %>%
+  select(model, names, x, predictor_type, Kingdom, Phylum, Class, Order, Family, Genus, Species) 
+top_bact_ITS_mod_features <- get_top_25_features(model_2_opt_ranger, combined_order_tax_table, "Order") |>
+  plot_top_25_features()
+
+its_order_env_imp <- get_top_25_features(model_3_opt_ranger, its_order_tax_table, "Order") %>%
+  mutate(model = "ITS order env") %>%
+  select(model, names, x, predictor_type, Kingdom, Phylum, Class, Order, Family, Genus, Species) 
+top_its_mod_features <- get_top_25_features(model_3_opt_ranger, its_order_tax_table, "Order") |>
+  plot_top_25_features()
+  
+```
+
+```{r, echo=FALSE}
+ggarrange(top_bact_mod_features, top_its_mod_features, top_bact_ITS_mod_features,  nrow = 2, ncol = 2, labels = c("A", "B", "C"), align = "v", common.legend = TRUE)
+```
+
+
+```{r, include=FALSE, eval=FALSE}
+tiff(here::here("figures/Fig5.tiff"), units = "in", width = 7.5, height = 5.5, res = 300)
+ggarrange(top_bact_mod_features, top_its_mod_features, top_bact_ITS_mod_features, nrow = 2, ncol = 2, labels = c("A", "B", "C"), align = "v", common.legend = TRUE)
+dev.off()
+```
+
+```{r, include=FALSE, eval=FALSE}
+top_mods_imp <- rbind(bact_phylum_env_imp,
+                      bact_its_order_imp,
+                      its_order_env_imp)  %>%
+  group_by(model) %>%
+  arrange(desc(x))
+  
+which(top_mods_imp$model %in% "16S phylum env") 
+which(top_mods_imp$model %in% "16S-ITS order noenv") 
+which(top_mods_imp$model %in% "ITS order env") 
+
+options(knitr.kable.NA = '')
+
+top_mods_imp %>%
+  select(-model, -Family, -Genus, -Species) %>%
+  kbl(.,
+      format = "latex",
+      col.names = c("Feature", "Importance", "Type", "Kingdom", "Phylum", "Class", "Order"),
+      digits = 1,
+      booktabs = T) %>%
+  pack_rows("16S phylum env", 1, 25, latex_gap_space = "1em") %>%
+  pack_rows("16S-ITS order noenv", 26, 50, latex_gap_space = "1em") %>%
+  pack_rows("ITS order env", 51, 75, latex_gap_space = "1em") %>%
+  save_kable(here::here("Mason_SoilMicrobe-PMI_PLoS_2024/figures/top_models_featureimportance.pdf"))
+  
+  
+
+```    
+
+```{r}
+top_mods_imp <- rbind(bact_phylum_env_imp,
+                      bact_its_order_imp,
+                      its_order_env_imp)  %>%
+  group_by(model) %>%
+  arrange(desc(x))
+  
+options(knitr.kable.NA = '')
+
+top_mods_imp %>%
+  ungroup() %>%
+  select(-model, -Family, -Genus, -Species) %>%
+  kbl(.,
+      format = "latex",
+      col.names = c("Feature", "Importance", "Type", "Kingdom", "Phylum", "Class", "Order"),
+      digits = 1,
+      booktabs = T) %>%
+  pack_rows("16S phylum env", 1, 25, latex_gap_space = "1em") %>%
+  pack_rows("16S-ITS order noenv", 26, 50, latex_gap_space = "1em") %>%
+  pack_rows("ITS order env", 51, 75, latex_gap_space = "1em") %>%
+  save_kable(here::here("Mason_SoilMicrobe-PMI_PLoS_2024/figures/S8Table.pdf"))
+  
+```         
+
+### Taxon abundance for select top features
+
+```{r, include=FALSE, warning=FALSE}
+bact_phylum_env_top_features <- get_top_25_features(all_rf_results$bact_phylum_env@optimal_model_results$optimal_ranger, bact_phylum_tax_table, "Phylum")
+
+phyla_taxa <- bact_phylum_env_top_features %>%
+  filter(predictor_type == "16S") %>%
+  slice_head(n = 5) %>%
+  pull(tax)
+
+# phyla_taxa <- c("Firmicutes", "Acidobacteria", "Proteobacteria", "Nitrospirae")
+
+phyla_taxa_otus <- bact_phylum_env_top_features$names[which(bact_phylum_env_top_features$tax %in% phyla_taxa)]
+
+
+######################################
+######## load metadata ###############
+######################################
+treatments <- read_excel(here("Mason_SoilMicrobialEcology-Decomp-BMI_mSphere_2022/treatments_pub.xlsx"))
+treatments$ADH=as.numeric(treatments$ADH)
+treatments$Type=as.factor(treatments$Type)
+treatments$Trt=as.factor(treatments$Trt)
+treatments$Sample_Type=as.factor(treatments$Sample_Type)
+treatments$Timepoint=as.factor(treatments$Timepoint)
+treatments$Season=as.factor(treatments$Season)
+treatments$Sector=as.factor(treatments$Sector)
+treatments$Sex=as.factor(treatments$Sex)
+treatments$BMI_level = factor(treatments$BMI_level, ordered = TRUE, levels = c("Underweight","Normal","Overweight","Obese"))
+
+TOXdata = read_excel(here("Mason_SoilMicrobialEcology-Decomp-BMI_mSphere_2022/TOX_data_all_pub.xlsx"), sheet = "Data")
+
+TOXdata = TOXdata %>% select("Sample","Temperature","ADH_10_actual", "Gravimetric Moisture","pH","pH_LRR","EC","EC_LRR","BG_avg","BG_LRR","NAG_avg","NAG_LRR","PHOS_avg","PHOS_LRR","LAP_avg", "LAP_LRR","Evolved_CO2","LRR_resp")
+
+metadata = treatments %>%
+  left_join(TOXdata, by = "Sample")
+
+#prep metadata for phyloseq
+map=metadata
+head(map)
+map=sample_data(map) #convert metadata into phyloseq format
+rownames(map)=map$group #assign rownames to be group
+
+levels=c("TOX001CON", "TOX001", "TOX001_1500", "TOX001_3000", "TOX001_4500", "TOX001_8000", "TOX001_11500", "TOX001_15500","TOX001DF", "TOX002CON", "TOX002", "TOX002_1500A", "TOX002_1500B", "TOX002_2750", "TOX002_3750","TOX002DF", "TOX003CON", "TOX003", "TOX003_1500", "TOX003_3000", "TOX003_4500","TOX003DF", "TOX004CON", "TOX004", "TOX004_1500", "TOX004_3000", "TOX004_3500","TOX004DF", "TOX005CON", "TOX005", "TOX005_1500", "TOX005_3000", "TOX005_4500", "TOX005_6500", "TOX005_8500","TOX005DF", "TOX006CON", "TOX006", "TOX006_1500", "TOX006_3000", "TOX006_4500","TOX006DF", "TOX007CON", "TOX007", "TOX007_1500", "TOX007_3000", "TOX007_4500", "TOX007_6000","TOX007DF", "TOX008CON", "TOX008", "TOX008_1500", "TOX008_3000", "TOX008_4500", "TOX008_6500","TOX008DF", "TOX009CON", "TOX009", "TOX009_1500", "TOX009_3000", "TOX009_4500","TOX009DF", "TOX010CON", "TOX010", "TOX010_1500", "TOX010_2500", "TOX010_4500", "TOX010_9000", "TOX010_13000", "TOX010_17500", "TOX010DF", "TOX011CON", "TOX011", "TOX011_1500", "TOX011_3000", "TOX011_3500", "TOX011_5500", "TOX011_7000", "TOX012CON", "TOX012", "TOX012_1500", "TOX012_3000", "TOX012_4000", "TOX012_6000","TOX012DF", "TOX013CON", "TOX013", "TOX013_1500", "TOX013_3000", "TOX013_4000", "TOX013_7500", "TOX013DF","TOX015CON","TOX015","TOX015_250","TOX015_500","TOX015_1000","TOX015_1500", "TOX016CON","TOX016","TOX016_500","TOX016_1000","TOX016_1500","TOX016DF","TOX017CON","TOX017","TOX017_1500","TOX017_3000","TOX017_4500","TOX017_8500","TOX017_13000","TOX017_18500","TOX017DF","TOX018CON","TOX018","TOX018_1500","TOX018_2000","TOX018_3000","TOX018_4000", "TOX019CON","TOX019","TOX019_1500","TOX019_3000","TOX019_3500","TOX019_4500","TOX019_5500","TOX019DF","TOX020CON","TOX020","TOX020_1500","TOX020_3500","TOX020_4500","TOX020_6000","TOX020DF")
+map$group=ordered(map$group, levels=levels)
+
+
+#####################################################
+#### obtain 16S OTU tables from phyloseq object #####
+######################################################
+mothur_16S_data = import_mothur(mothur_shared_file = here("Mason_SoilMicrobialEcology-Decomp-BMI_mSphere_2022/TOX2_16S.shared"), mothur_constaxonomy_file = here("Mason_SoilMicrobialEcology-Decomp-BMI_mSphere_2022/TOX2_16S.taxonomy"))
+moth_merge = merge_phyloseq(mothur_16S_data, map) #merge mothurdata with the metadata
+colnames(tax_table(moth_merge)) #print column names of tax file
+colnames(tax_table(moth_merge)) = c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus") #rename tax column names
+
+moth_sub = subset_samples(moth_merge, Type == "sample") #remove check samples
+moth_decomp = subset_samples(moth_sub, Trt == "donor") #remove fluid samples and control soil samples
+moth_decomp = subset_samples(moth_decomp, group != "TOX002_1500A") #remove TOX002-1500
+moth_decomp = subset_samples(moth_decomp, group != "TOX002_1500B") #remove TOX002-1500
+moth_decomp_5000 = subset_samples(moth_decomp, ADH_10_actual < 5000)
+
+phylum_abundance <- moth_decomp_5000 %>%
+  tax_glom(taxrank = "Phylum") %>%
+  transform_sample_counts(function(x) {x / sum(x)}) %>%
+  psmelt() %>%
+  filter(Phylum %in% phyla_taxa) %>%
+  select(Donor, ADH, ADH_10_actual, OTU, Phylum, Abundance) 
+  # %>%
+  # pivot_wider(names_from = OTU, values_from = Abundance)
+  
+theme_abundance <- function(ggplot) {
+  ggplot + 
+  scale_color_manual(values = colpalette2) +
+  labs(x = "Accumulated Degree Hours",
+       y = "Relative Abundance") +
+  theme_bw() +
+  # theme(strip.text = element_text(face = "italic")) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_rect(fill = "white")) +
+  theme(legend.position = "bottom",
+        legend.title.position = "top") + 
+  guides(color = guide_legend(override.aes = list(size = 0.5))) +
+  guides(color = guide_legend(ncol = 10, byrow = TRUE))  +
+  theme(legend.title = element_text(size = 8), 
+        legend.text = element_text(size = 8),
+        legend.key.size = unit(0.1, "lines"))
+}
+
+
+ggplot(subset(phylum_abundance, Phylum %in% phyla_taxa[1])) +
+  aes(x = ADH_10_actual, y = Abundance, color = Donor) +
+  geom_point() 
+
+theme_abundance(ggplot(subset(phylum_abundance, Phylum %in% phyla_taxa[1])) +
+  aes(x = ADH_10_actual, y = Abundance, color = Donor) +
+  geom_point() )
+
+phylum_plot <- phylum_abundance %>%
+  ggplot() +
+  aes(x = ADH_10_actual, y = Abundance, color = Donor) +
+  geom_point() +
+  # geom_line(na.rm = TRUE) +
+  scale_color_manual(values = colpalette2) +
+  labs(x = "Accumulated Degree Hours",
+       y = "Relative Abundance") +
+  theme_bw() +
+  # theme(strip.text = element_text(face = "italic")) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_rect(fill = "white")) +
+  theme(legend.position = "bottom",
+        legend.title.position = "top") + 
+  guides(color = guide_legend(override.aes = list(size = 0.5))) +
+  guides(color = guide_legend(ncol = 10, byrow = TRUE))  +
+  theme(legend.title = element_text(size = 8), 
+        legend.text = element_text(size = 8),
+        legend.key.size = unit(0.1, "lines")) +
+  facet_wrap(~ Phylum, scales = "free_y")
+ 
+
+```
+
+```{r, echo=FALSE, warning=FALSE}
+phylum_plot 
+```
+
+```{r, include=FALSE, eval=FALSE}
+tiff(here::here("Mason_SoilMicrobe-PMI_PLoS_2024/figures/Fig6.tiff"), units = "in", width = 7.5, height = 5.5, res = 300)
+phylum_plot
+dev.off()
+```
+
+```{r, include=FALSE, eval=FALSE}
+timepoint_counts <- metadata %>%
+  filter(Trt == "donor") %>%
+  filter(ADH_10_actual <= 5000) %>%
+  group_by(Donor) %>%
+  count()
+  
+metadata_table <- metadata %>%
+  filter(Trt == "donor") %>%
+  filter(ADH_10_actual <= 5000) %>%
+  filter(ADH == 0) %>%
+  arrange(Donor) %>%
+  left_join(timepoint_counts, by = "Donor") %>%
+  select(Donor, Sex, Age, Weight, Season, Total_ADH, n) %>%
+  mutate(Sex = case_when(Sex == "F" ~ "Female", Sex == "M" ~ "Male"),
+         Season = case_when(Season == "F" ~ "Fall", Season == "W" ~ "Winter", Season == "Sp" ~ "Spring", Season == "Su" ~ "Summer"))
+  
+kbl(metadata_table,
+    format = "latex",
+    col.names = c("Donor", "Age", "Sex", "Weight", "Season", "Total ADH", "Timpoints in Models"),
+    digits = 3,
+    booktabs = TRUE,
+    align = 'c') %>%
+save_kable(here::here("Mason_SoilMicrobe-PMI_PLoS_2024/figures/Donor_metadata.pdf"), keep_tex = FALSE)
+```
+
+```{r, include=FALSE, eval=FALSE}
+kbl(metadata_table,
+    format = "latex",
+    col.names = c("Donor", "Age", "Sex", "Weight", "Season", "Total ADH", "Timpoints in Models"),
+    digits = 3,
+    booktabs = TRUE,
+    align = 'c') %>%
+save_kable(here::here("Mason_SoilMicrobe-PMI_PLoS_2024/figures/S1Table.pdf"), keep_tex = FALSE)
+```
+
+```{r, include=FALSE, warning=FALSE}
+its_order_env_top_features <- get_top_25_features(all_rf_results$ITS_order_env@optimal_model_results$optimal_ranger, its_order_tax_table, "Order")
+
+its_order_env_top_features %>%
+  filter(predictor_type == "ITS") %>%
+  slice_head(n = 5) %>%
+  pull(tax)
+
+taxa <- c("o__Pleosporales")
+
+taxa_otus <- its_order_noenv_top_features$names[which(its_order_env_top_features$tax %in% taxa)]
+
+
+
+######################################
+######## load metadata ###############
+######################################
+treatments <- read_excel(here("../Mason_SoilMicrobialEcology-Decomp-BMI_mSphere_2022/treatments_pub.xlsx"))
+treatments$ADH=as.numeric(treatments$ADH)
+treatments$Type=as.factor(treatments$Type)
+treatments$Trt=as.factor(treatments$Trt)
+treatments$Sample_Type=as.factor(treatments$Sample_Type)
+treatments$Timepoint=as.factor(treatments$Timepoint)
+treatments$Season=as.factor(treatments$Season)
+treatments$Sector=as.factor(treatments$Sector)
+treatments$Sex=as.factor(treatments$Sex)
+treatments$BMI_level = factor(treatments$BMI_level, ordered = TRUE, levels = c("Underweight","Normal","Overweight","Obese"))
+
+TOXdata = read_excel(here("../Mason_SoilMicrobialEcology-Decomp-BMI_mSphere_2022/TOX_data_all_pub.xlsx"), sheet = "Data")
+
+TOXdata = TOXdata %>% select("Sample","Temperature","ADH_10_actual", "Gravimetric Moisture","pH","pH_LRR","EC","EC_LRR","BG_avg","BG_LRR","NAG_avg","NAG_LRR","PHOS_avg","PHOS_LRR","LAP_avg", "LAP_LRR","Evolved_CO2","LRR_resp")
+
+metadata = treatments %>%
+  left_join(TOXdata, by = "Sample")
+
+#prep metadata for phyloseq
+map=metadata
+head(map)
+map=sample_data(map) #convert metadata into phyloseq format
+rownames(map)=map$group #assign rownames to be group
+
+levels=c("TOX001CON", "TOX001", "TOX001_1500", "TOX001_3000", "TOX001_4500", "TOX001_8000", "TOX001_11500", "TOX001_15500","TOX001DF", "TOX002CON", "TOX002", "TOX002_1500A", "TOX002_1500B", "TOX002_2750", "TOX002_3750","TOX002DF", "TOX003CON", "TOX003", "TOX003_1500", "TOX003_3000", "TOX003_4500","TOX003DF", "TOX004CON", "TOX004", "TOX004_1500", "TOX004_3000", "TOX004_3500","TOX004DF", "TOX005CON", "TOX005", "TOX005_1500", "TOX005_3000", "TOX005_4500", "TOX005_6500", "TOX005_8500","TOX005DF", "TOX006CON", "TOX006", "TOX006_1500", "TOX006_3000", "TOX006_4500","TOX006DF", "TOX007CON", "TOX007", "TOX007_1500", "TOX007_3000", "TOX007_4500", "TOX007_6000","TOX007DF", "TOX008CON", "TOX008", "TOX008_1500", "TOX008_3000", "TOX008_4500", "TOX008_6500","TOX008DF", "TOX009CON", "TOX009", "TOX009_1500", "TOX009_3000", "TOX009_4500","TOX009DF", "TOX010CON", "TOX010", "TOX010_1500", "TOX010_2500", "TOX010_4500", "TOX010_9000", "TOX010_13000", "TOX010_17500", "TOX010DF", "TOX011CON", "TOX011", "TOX011_1500", "TOX011_3000", "TOX011_3500", "TOX011_5500", "TOX011_7000", "TOX012CON", "TOX012", "TOX012_1500", "TOX012_3000", "TOX012_4000", "TOX012_6000","TOX012DF", "TOX013CON", "TOX013", "TOX013_1500", "TOX013_3000", "TOX013_4000", "TOX013_7500", "TOX013DF","TOX015CON","TOX015","TOX015_250","TOX015_500","TOX015_1000","TOX015_1500", "TOX016CON","TOX016","TOX016_500","TOX016_1000","TOX016_1500","TOX016DF","TOX017CON","TOX017","TOX017_1500","TOX017_3000","TOX017_4500","TOX017_8500","TOX017_13000","TOX017_18500","TOX017DF","TOX018CON","TOX018","TOX018_1500","TOX018_2000","TOX018_3000","TOX018_4000", "TOX019CON","TOX019","TOX019_1500","TOX019_3000","TOX019_3500","TOX019_4500","TOX019_5500","TOX019DF","TOX020CON","TOX020","TOX020_1500","TOX020_3500","TOX020_4500","TOX020_6000","TOX020DF")
+map$group=ordered(map$group, levels=levels)
+
+
+#####################################################
+#### obtain 16S OTU tables from phyloseq object #####
+######################################################
+mothur_ITS_data = import_mothur(mothur_shared_file = here("../Mason_SoilMicrobialEcology-Decomp-BMI_mSphere_2022/TOX2_ITS.shared"), mothur_constaxonomy_file = here("../Mason_SoilMicrobialEcology-Decomp-BMI_mSphere_2022/TOX2_ITS.taxonomy"))
+moth_ITS_merge = merge_phyloseq(mothur_ITS_data, map) #merge mothurdata with the metadata
+colnames(tax_table(moth_ITS_merge)) #print column names of tax file
+colnames(tax_table(moth_ITS_merge)) = c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species") #rename tax column names
+
+moth_ITS_sub = subset_samples(moth_ITS_merge, Type == "sample") #remove check samples
+moth_ITS_decomp = subset_samples(moth_ITS_sub, Trt == "donor") #remove fluid samples and control soil samples
+moth_ITS_decomp = subset_samples(moth_ITS_decomp, group != "TOX002_1500A") #remove TOX002-1500
+moth_ITS_decomp = subset_samples(moth_ITS_decomp, group != "TOX002_1500B") #remove TOX002-1500
+moth_ITS_decomp_5000 = subset_samples(moth_ITS_decomp, ADH_10_actual < 5000)
+
+pleo_abundance <- moth_ITS_decomp_5000 %>%
+  tax_glom(taxrank = "Order") %>%
+  transform_sample_counts(function(x) {x / sum(x)}) %>%
+  psmelt() %>%
+  filter(Order %in% taxa) %>%
+  select(Donor, ADH, ADH_10_actual, OTU, Order, Abundance) 
+  # %>%
+  # pivot_wider(names_from = OTU, values_from = Abundance)
+
+pleo_plot <- pleo_abundance %>%
+  ggplot() +
+  aes(x = ADH_10_actual, y = Abundance, color = Donor) +
+  geom_point() +
+  # geom_line(na.rm = TRUE) +
+  scale_color_manual(values = colpalette2) +
+  labs(x = "Accumulated Degree Hours",
+       y = "Relative Abundance") +
+  theme_bw() +
+  # theme(strip.text = element_text(face = "italic")) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  theme(legend.position = "bottom",
+        legend.title.position = "top") + 
+  guides(color = guide_legend(override.aes = list(size = 0.5))) +
+  guides(color = guide_legend(ncol = 6, byrow = TRUE))  +
+  theme(legend.title = element_text(size = 8), 
+        legend.text = element_text(size = 8),
+        legend.key.size = unit(0.1, "lines"))
+
+```
+
+
+```{r, echo=FALSE, warning=FALSE}
+pleo_plot + labs(title = "*Pleosporales* relative abundance")
+```
+
+```{r, include=FALSE, eval=FALSE}
+tiff(here::here("figures/Fig7.tiff"), units = "in", width = 4.5, height = 3.5, res = 300)
+pleo_plot
+```
+
+```{r, include = FALSE}
+bact_its_order_env_top_features <- get_top_25_features(all_rf_results$ITS_order_noenv@optimal_model_results$optimal_ranger, its_order_tax_table, "Order")
+
+bact_order_tax_table <- read_excel(here("Mason_SoilMicrobe-PMI_PLoS_2024/data/TOX2_16S_TSS_Order_taxtable.xlsx"))
+
+
+bact_its_order_top_features <- get_top_25_features(all_rf_results$bact_ITS_order_noenv@optimal_model_results$optimal_ranger, bact_order_tax_table, "Order")
+
+order_taxa <- bact_its_order_top_features %>%
+  filter(predictor_type == "16S") %>%
+  slice_head(n = 5) %>%
+  pull(tax)
+
+# order_taxa <- c("Lactobacillales", "Bacteroidales", "Cardiobacteriales", "Clostridiales")
+
+order_abundance <- moth_decomp_5000 %>%
+  tax_glom(taxrank = "Order") %>%
+  transform_sample_counts(function(x) {x / sum(x)}) %>%
+  psmelt() %>%
+  filter(Order %in% order_taxa) %>%
+  select(Donor, ADH, ADH_10_actual, OTU, Order, Abundance) 
+  # %>%
+  # pivot_wider(names_from = OTU, values_from = Abundance)
+
+order_plot <- order_abundance %>%
+  ggplot() +
+  aes(x = ADH_10_actual, y = Abundance, color = Donor) +
+  geom_point() +
+  # geom_line(na.rm = TRUE) +
+  scale_color_manual(values = colpalette2) +
+  labs(x = "Accumulated Degree Hours",
+       y = "Relative Abundance") +
+  theme_bw() +
+  # theme(strip.text = element_text(face = "italic")) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_rect(fill = "white")) +
+  theme(legend.position = "bottom",
+        legend.title.position = "top") + 
+  guides(color = guide_legend(override.aes = list(size = 0.5))) +
+  guides(color = guide_legend(ncol = 10, byrow = TRUE))  +
+  theme(legend.title = element_text(size = 8), 
+        legend.text = element_text(size = 8),
+        legend.key.size = unit(0.1, "lines")) +
+  facet_wrap(~ Order, scales = "free_y")
+```
+
+```{r, echo = FALSE}
+order_plot
+```
+
+```{r, include=FALSE, eval=FALSE}
+tiff(here::here("Mason_SoilMicrobe-PMI_PLoS_2024/figures/S2Fig.tiff"), units = "in", width = 7.5, height = 5.5, res = 300)
+order_plot
+dev.off()
+```
