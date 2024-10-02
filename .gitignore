@@ -26,8 +26,7 @@
 /Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/PloS_revisions_052024/*
 
 # ignore revision tmp files
-/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/PloS_revisons.aux
-/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/PloS_revisons.bbl
-/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/PloS_revisons.blg
-/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/PloS_revisons.docx
-/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/PloS_revisons.log
+/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/*.aux
+/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/*.blg
+/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/*.docx
+/Mason_SoilMicrobe-PMI_XXXXX_2023/manuscript/PloS/*.log
